@@ -1,0 +1,7 @@
+# PkgServerLogAnalysis.jl
+
+First off, to use these processing routines, you'll need access to the logs.  If you've already gotten the requisite SSH access to the PkgServers correctly, then `sync_logs.jl` will connect to them just fine.  If not, you can test new analysis passes on the test data contained within the test suite, stored within an artifact in this repository.  See `bin/load_test_data.jl` for an example oof how to load that test data.  The test data is generated through applying `bin/anonymize_log.jl` to a real logfile.
+
+The logs are stored in separate log files per day, per server, [collated by `logrotate`](https://github.com/JuliaPackaging/PkgServerS3Mirror/blob/master/logrotate.conf) on each individual server.  `sync_logs.jl` transfers the compressed gzip archives of each day's logs, and `parse_logfiles()` reads them in with a giant regex to parse out relevant pieces of information.  Because parsing is fairly expensive, we cache the parse results in compressed `.csvz` files, stored in a scratch space.
+
+Right now, there is a single main analysis script stored in `bin`, `package_hits_by_day.jl`.  It's a [`Pluto.jl`](https://github.com/fonsp/Pluto.jl) notebook, I suggest running it inside of a `Pluto` session with multiple threads, to improve parsing efficiency via `Pluto.run(;threads="8")` or so.  Future decisions will solidify the contract of analysis passes, and determine the best way to present it to the world.

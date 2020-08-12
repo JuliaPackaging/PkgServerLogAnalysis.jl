@@ -1,0 +1,4 @@
+output/*
+logs/*
+!logs/sync_logs.jl
+!logs/anonymized_test_data.gz

@@ -1,0 +1,7 @@
+[anonymized_test_data]
+git-tree-sha1 = "6513aa7f4dabb844d01e107155bd3e95b378872a"
+lazy = true
+
+    [[anonymized_test_data.download]]
+    sha256 = "6ec64694cd8175e0bd52790c8d6e819ddd21692ea77cfa4cceb4162892f39735"
+    url = "https://github.com/JuliaPackaging/PkgServerLogAnalysis.jl/releases/download/0.0.1/anonymized_test_data.tar.gz"
