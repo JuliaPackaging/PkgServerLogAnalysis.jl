@@ -56,15 +56,15 @@ field(name, pat; kwargs...) = field_ns(name, pat; kwargs...)
 # Build mondo regex to parse whole line into fields.  This is going to be a ridiculously large regex.dd
 
 # For reference, the log_format used by nginx is:
-# '$remote_addr [$time_local] "$request" $status $body_bytes_sent "$http_user_agent" $request_time $http_julia_version $http_julia_system "$http_julia_ci_variables" $http_julia_interactive "$http_julia_pkg_server"'
+# '$remote_addr [$time_iso8601] "$request" $status $body_bytes_sent "$http_user_agent" $request_time $http_julia_version $http_julia_system "$http_julia_ci_variables" $http_julia_interactive "$http_julia_pkg_server"'
 const hex_re = "[a-fA-F0-9]"
 const uuid_re = "$(hex_re){8}-$(hex_re){4}-$(hex_re){4}-$(hex_re){4}-$(hex_re){12}"
 const hash_re = "$(hex_re){40}"
 const mondo_pieces = [
     # $remote_addr, either an ipv4 or ipv6 address
     field("remote_addr", raw"[\.a-fA-F0-9:]+"),
-    # $time_local, a timestamp a la `[16/Jul/2020:06:24:54 +0000]`
-    field("time_local", raw"\[.*?\]"),
+    # $time_iso8601 or $time_local, a timestamp a la `[16/Jul/2020:06:24:54 +0000]`/`[2016-09-29T10:20:48+01:00]`
+    field("time_utc", raw"\[.*?\]"),
     # $request, which we split into `$request_method`, `$request_url` and `$request_http`.
     field("request", string(
            field("request_method", raw"[^ ]+"),
@@ -155,7 +155,64 @@ function should_ignore_parse_failure(r::RegexMatch)
     return false
 end
 
-function parse_log_line(line::AbstractString, filename::AbstractString)
+# We rewrite some regex matches
+function fetch_rewrite(m::RegexMatch, k::Symbol)
+    x = m[k]
+
+    # Rewrite timestamp into ISO8601 format
+    if k === :time_utc
+        # nginx $time_local format, e.g. [29/Sep/2016:10:20:48 +0100]
+        time_local_re = r"^\[(\d{2}\/\w{3}\/\d{4}:\d{2}:\d{2}:\d{2}) (\+|-)(\d{2})(\d{2})\]$"
+        # nginx $time_iso8601 format, e.g. [2016-09-29T10:20:48+01:00]
+        time_iso8601_re = r"^\[(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(\+|-)(\d{2}):(\d{2})\]$"
+        if (m = match(time_local_re, x)) !== nothing
+            dt = tryparse(DateTime, m[1], dateformat"dd/uu/yyyy:HH:MM:SS")
+            offset_sign = m[2]
+            offset_hour = m[3]
+            offset_min = m[4]
+        elseif (m = match(time_iso8601_re, x)) !== nothing
+            dt = tryparse(DateTime, m[1], dateformat"yyyy-mm-ddTHH:MM:SS")
+            offset_sign = m[2]
+            offset_hour = m[3]
+            offset_min = m[4]
+        else
+            return nothing
+        end
+        dt === nothing && return nothing
+        offset = Hour(parse(Int, offset_hour)) + Minute(parse(Int, offset_min))
+        if offset_sign == "+"
+            dt -= offset
+        else # offset_sign == "-"
+            dt += offset
+        end
+        return Dates.format(dt, dateformat"yyyy-mm-ddTHH:MM:SS")
+    end
+
+    # Parse request_time as Float64
+    if k === :request_time
+        return tryparse(Float64, x)
+    end
+
+    # Parse status and body_bytes_sent as Int
+    if k === :status || k == :body_bytes_sent
+        return tryparse(Int, x)
+    end
+
+    # Parse julia_interactive as Bool
+    if k === :julia_interactive
+        return tryparse(Bool, x)
+    end
+
+    # Rewrite "-" to missing
+    if x == "-"
+        return missing
+    end
+
+    return x
+end
+
+
+function parse_log_line(line::AbstractString, filename::AbstractString="")
     m = match(mondo_regex, line)
     if m === nothing
         # Try to debug where it went wrong:
@@ -185,7 +242,8 @@ function parse_log_line(line::AbstractString, filename::AbstractString)
     if fm !== nothing
         pkgserver = fm[1]
     end
-    return (;(k => nothing_to_missing(m[k]) for k in mondo_capture_groups)..., :pkgserver => pkgserver)
+
+    return (;(k => nothing_to_missing(fetch_rewrite(m, k)) for k in mondo_capture_groups)..., :pkgserver => pkgserver)
 end
 
 function hit_filecache(collator::Function, src_filename::String, cleanup::Bool = true)

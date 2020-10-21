@@ -1,5 +1,6 @@
 name = "PkgServerLogAnalysis"
 uuid = "736c6f6f-5473-6973-796c-616e41676f4c"
+version = "0.1.0"
 
 [deps]
 Artifacts = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
@@ -17,3 +18,9 @@ Sockets = "6462fe0b-24de-5631-8697-dd941f90decc"
 Tables = "bd369af6-aec1-5ad0-b16a-f7cc5008161c"
 TranscodingStreams = "3bb67fe8-82b1-5028-8e26-92a6c54297fa"
 WebCacheUtilities = "0c1c26de-fc5f-47ff-87a8-a157289a9bac"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
