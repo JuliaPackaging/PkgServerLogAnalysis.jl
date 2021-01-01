@@ -4,6 +4,8 @@ export parse_logfiles, hist
 
 using CodecZlib, SimpleBufferStream, TranscodingStreams, CSV, Tables, Printf, Sockets, Dates, Scratch, SHA
 
+include("AdminUtils.jl")
+
 function decompress!(input::IO, output::IO; blocksize::Int = 2*1024*1024)
     output = TranscodingStream(GzipDecompressor(), output)
     while !eof(input)
