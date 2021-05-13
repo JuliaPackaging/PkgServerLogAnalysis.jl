@@ -16,13 +16,13 @@ outfile = ARGS[2]
 
 function load_nginx_log(filename)
     if endswith(filename, ".gz")
-        open(filename, "r") do io
+        return open(filename, "r") do io
             decomp_io = BufferStream()
             @async decompress!(io, decomp_io)
-            data = String(read(decomp_io))
+            return String(read(decomp_io))
         end
     else
-        data = String(read(filename))
+        return String(read(filename))
     end
 end
 data = load_nginx_log(infile)
