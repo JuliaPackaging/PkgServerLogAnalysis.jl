@@ -1,11 +1,11 @@
 ### A Pluto.jl notebook ###
-# v0.12.4
+# v0.14.4
 
 using Markdown
 using InteractiveUtils
 
 # ╔═╡ 830b9254-0f0f-11eb-2413-1bee87660bb8
-using WebCacheUtilities, PkgServerLogAnalysis, CSV, Sockets, Dates, Printf, Plots, Pkg
+using WebCacheUtilities, PkgServerLogAnalysis, CSV, Sockets, Dates, Printf, Plots, Pkg, Scratch
 
 # ╔═╡ b0c79334-0f0f-11eb-31b7-6b7fb9d3c2ea
 begin
@@ -25,7 +25,7 @@ begin
 end
 
 # ╔═╡ 27f20b7e-0f1f-11eb-0946-7961458506fc
-function partition(data::Vector, criteria::Function)
+function partition(criteria::Function, data::Vector)
 	outputs = Dict{Any,Vector{CSV.Row}}()
 	for d in data
 		c = criteria(d)
@@ -41,22 +41,17 @@ end
 begin
 	# Split CI hits out, and keep only package downloads
 	part_raw_data = filter!(is_pkg_download, raw_data)
-	part_raw_data = partition(part_raw_data, is_ci_ip)
+	part_raw_data = partition(is_ci_ip, part_raw_data)
 	data = get(part_raw_data, false, CSV.Row[])
 	ci_data = get(part_raw_data, true, CSV.Row[])
 end;
 
 # ╔═╡ d661b24c-0f1d-11eb-2494-2dae16fc399f
-"CI hits: $(length(ci_data)), other hits: $(length(data))"
-
-# ╔═╡ 997b5fa2-0f1f-11eb-3aba-11a16b36c946
-# Next, split by package UUID
-data_by_uuid = partition(data, d -> d.package_uuid);
+display("CI hits: $(length(ci_data)), other hits: $(length(data))");
 
 # ╔═╡ bfac967c-0fd4-11eb-306e-4bfc20cb9b8f
 function get_package_name(uuid::String)
 	regs = Pkg.Types.collect_registries()
-	local z
 	for r in regs
 		packages = Pkg.Types.read_registry(joinpath(r.path, "Registry.toml"))["packages"]
 		if haskey(packages, uuid)
@@ -69,30 +64,33 @@ end
 # ╔═╡ 9b069834-0fe0-11eb-331f-a78263f9ebf7
 get_package_name(x) = nothing
 
-# ╔═╡ ab28075a-0f1f-11eb-37c1-63cb56cb28d2
-uuid_downloads = sort([u => length(data_by_uuid[u]) for u in keys(data_by_uuid)], by = k -> -k.second)
-
 # ╔═╡ 0053a8e8-0f33-11eb-27e9-e7f200e56661
 begin
 	df = DateFormat("d/u/y:H:M:S")
-	get_datetime(row::CSV.Row) = DateTime(row.time_local[2:end-7], df)
-	get_monthday(row::CSV.Row) = get_monthday(get_datetime(row))
+	get_monthday(row::CSV.Row) = get_monthday(row.time_utc)
 	get_monthday(dt::DateTime) = @sprintf("%02d/%02d", month(dt), day(dt))
 end
 
-# ╔═╡ f6679374-0fe0-11eb-02b8-599174d1a575
-# We purposefully exclude the first and last day to avoid timezone boundary issues
-days_to_plot = sort(collect(Set(get_monthday(r) for r in data)))[2:end-2]
+# ╔═╡ 997b5fa2-0f1f-11eb-3aba-11a16b36c946
+begin
+	# We purposefully exclude the first and last day to avoid timezone boundary issues
+	days_to_plot = sort(collect(Set(get_monthday(r) for r in data)))[2:end-1]
+	data_time_filtered = filter(r -> get_monthday(r) ∈ days_to_plot, data)
+	
+	# Next, split by package UUID and quickly calculate total downloads
+	data_by_uuid = partition(d -> d.package_uuid, data_time_filtered);
+	uuid_downloads = sort([u => length(data_by_uuid[u]) for u in keys(data_by_uuid)], by = k -> -k.second)
+end
 
 # ╔═╡ 8e490634-1230-11eb-27a5-3b7c9111e1f9
-output_path = abspath(mkpath(joinpath(@__DIR__, "..", "output")))
+output_path = @get_scratch!("output")
 
 # ╔═╡ d8e42340-1230-11eb-1ac1-db5dcad52696
 output_name = "package_downloads_by_day_$(month(now()))-$(day(now()))"
 
 # ╔═╡ a6b95bd4-1234-11eb-22f9-2b71252acf91
 # Split all uuid downloads by day
-data_by_uuid_by_day = Dict(uuid => partition(data_by_uuid[uuid], r -> get_monthday(r)) for uuid in keys(data_by_uuid));
+data_by_uuid_by_day = Dict(uuid => partition(r -> get_monthday(r), data_by_uuid[uuid]) for uuid in keys(data_by_uuid));
 
 # ╔═╡ e682db28-1234-11eb-2f65-a5b2c7851037
 # Helper function to get downloads for a particular day for a particular UUID
@@ -142,12 +140,10 @@ end
 # ╠═27f20b7e-0f1f-11eb-0946-7961458506fc
 # ╠═f18edd54-0f10-11eb-3320-a7ded568fb2b
 # ╠═d661b24c-0f1d-11eb-2494-2dae16fc399f
-# ╠═997b5fa2-0f1f-11eb-3aba-11a16b36c946
 # ╠═bfac967c-0fd4-11eb-306e-4bfc20cb9b8f
 # ╠═9b069834-0fe0-11eb-331f-a78263f9ebf7
-# ╠═ab28075a-0f1f-11eb-37c1-63cb56cb28d2
 # ╠═0053a8e8-0f33-11eb-27e9-e7f200e56661
-# ╠═f6679374-0fe0-11eb-02b8-599174d1a575
+# ╠═997b5fa2-0f1f-11eb-3aba-11a16b36c946
 # ╠═8e490634-1230-11eb-27a5-3b7c9111e1f9
 # ╠═d8e42340-1230-11eb-1ac1-db5dcad52696
 # ╠═a6b95bd4-1234-11eb-22f9-2b71252acf91

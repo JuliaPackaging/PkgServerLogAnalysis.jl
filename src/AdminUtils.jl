@@ -1,7 +1,20 @@
 using HTTP, JSON3
 
 function get_server_list()
-    replace.(JSON3.read(HTTP.get("https://pkg.julialang.org/meta/siblings").body), "https://" => "")
+    # Get the server list from the current default pkgserver
+    siblings = replace.(JSON3.read(HTTP.get("https://pkg.julialang.org/meta/siblings").body), "https://" => "")
+
+    # Go and ask each indifvidual sibling what it thinks its canonical URL is, in the case of redirects
+    c = Channel(length(siblings))
+    @info("Canonicalizing $(length(siblings)) server hostnames...")
+    @sync for sibling in siblings
+        @async begin
+            meta = JSON3.read(HTTP.get("https://$(sibling)/meta").body)
+            put!(c, replace(meta["pkgserver_url"], "https://" => ""))
+        end
+    end
+    close(c)
+    return collect(c)
 end
 
 """
@@ -26,10 +39,9 @@ end
 function get_ssh_creds(server)
     username = "ubuntu"
 
-    # Chinese servers need a little different configuration
-    if startswith("cn-", server)
+    # Chinese servers use the username `centos`
+    if startswith(server, "cn-")
         username = "centos"
-        server = replace(server, "julialang.org" => "juliacn.com")
     end
     return "$(username)@$(server)"
 end
