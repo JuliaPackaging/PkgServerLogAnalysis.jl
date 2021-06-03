@@ -30,17 +30,19 @@ function hit_filecache(collator::Function, src_filename::String, cleanup::Bool =
 
     # If it already exists, decompress it into a CSV.File
     @info("Loading cached $(dst_filename)")
-    open(dst_filename) do io
-        decomp_io = BufferStream()
-        t_decomp = @async try
+    decomp_io = BufferStream()
+    try
+        open(dst_filename) do io
             decompress!(io, decomp_io)
-        finally
-            close(decomp_io)
         end
-        data = CSV.File(read(decomp_io))
-        wait(t_decomp)
-        return data
+    catch
+        @error("Decompressing $(dst_filename) failed, re-parsing!")
+        rm(dst_filename)
+        return hit_filecache(collator, src_filename, cleanup)
+    finally
+        close(decomp_io)
     end
+    return CSV.File(read(decomp_io))
 end
 
 function parse_file(filename::AbstractString)
@@ -75,7 +77,7 @@ end
 
 # By default, we look at one week of data plus two days, since we usually throw out
 # the first and last days, to account for bad timezone overlaps.
-function parse_logfiles(criteria::Function = f -> is_access_log(f) && is_recent(f, 7+2),
+function parse_logfiles(criteria::Function = f -> is_access_log(f) && is_recent(f, 31+2),
                         dir::AbstractString = @get_scratch!("logs"))
     results_lock = ReentrantLock()
     parsed = []
