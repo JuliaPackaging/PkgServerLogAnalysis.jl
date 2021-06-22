@@ -25,10 +25,11 @@ steps:
       LOGSDIR=/tmp/logs
       
       # First, get list of servers
+      set -x
+      curl -vL https://pkg.julialang.org/meta/siblings
       SERVERS=( $(curl -sfL https://pkg.julialang.org/meta/siblings | jq '.[]') )
 
       echo "Downloading logs from ${#SERVERS[@]} servers..."
-      set -x
       for IDX in $(seq 1 ${#SERVERS[@]}); do
         SERVER="$(curl -sfL "${SERVERS[${IDX}]}/meta/" | jq '.pkgserver_url')"
         echo " -> [$IDX/${#SERVERS[@]}] ${SERVER}"
