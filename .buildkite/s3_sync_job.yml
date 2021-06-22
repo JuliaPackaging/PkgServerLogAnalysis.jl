@@ -1,0 +1,46 @@
+# NOTE: This buildkite pipeline is saved in the WebUI
+
+agents:
+  queue: "julia"
+  # Only run on `sandbox.jl` machines (not `docker`-isolated ones) since we need nestable sandboxing
+  sandbox.jl: "true"
+  os: "linux"
+steps:
+  - label: ":rocket: launch pipelines"
+    plugins:
+      - staticfloat/cryptic#v1:
+          variables:
+            - S3_ACCESS_KEY="U2FsdGVkX1/H9b08vYfGLIy0xYlKBA+pkT5XAjh5XrQdd5XNbjyVFXhv2XRsG13h"
+            - S3_SECRET_KEY="U2FsdGVkX1/YhdG5Jr9ywTjysCrjQIoAlfrVT8qMPzBoPttuG3NIMorn3LLcWpp657MEPhjib+MQ/At1qllwBg=="
+          files:
+            - .buildkite/secrets/id_rsa
+      - staticfloat/ssh-agent:
+          keyfiles:
+            - .buildkite/secrets/id_rsa
+    commands: |
+      echo "--- Install awscli"
+      apt install -y awscli || true
+
+      echo "+++ Download logs"
+      LOGSDIR=/tmp/logs
+      
+      # First, get list of servers
+      SERVERS=( $(curl -sfL https://pkg.julialang.org/meta/siblings | jq '.[]') )
+
+      echo "Downloading logs from ${#SERVERS[@]} servers..."
+      for IDX in $(seq 1 ${#SERVERS[@]}); do
+        SERVER="$(curl -sfL "${SERVERS[${IDX}]}/meta/" | jq '.pkgserver_url')"
+        echo " -> [$IDX/${#SERVERS[@]}] ${SERVER}"
+
+        USER=ubuntu
+        if [[ "${SERVER}" == cn-* ]]; then
+          USER=centos
+        fi
+        # Ignore return code from `rsync` so that we can skip failing servers
+        rsync -Pav -e "ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no" \
+                      "${USER}@${SERVER}:~/src/PkgServer.jl/deployment/logs/nginx/access_*.gz" \
+                      "${LOGSDIR}" || true
+      done
+
+      # Next, we're going to upload these logs to S3:
+      aws s3 sync "${LOGSDIR}" "s3://julialang-logs/pkgservers"

@@ -9,8 +9,14 @@ function get_server_list()
     @info("Canonicalizing $(length(siblings)) server hostnames...")
     @sync for sibling in siblings
         @async begin
-            meta = JSON3.read(HTTP.get("https://$(sibling)/meta").body)
-            put!(c, replace(meta["pkgserver_url"], "https://" => ""))
+            @info(sibling)
+            try
+                meta = JSON3.read(HTTP.get("https://$(sibling)/meta").body)
+                put!(c, replace(meta["pkgserver_url"], "https://" => ""))
+            catch
+                @warn("Unable to canonicalize", sibling)
+                put!(c, sibling)
+            end
         end
     end
     close(c)
