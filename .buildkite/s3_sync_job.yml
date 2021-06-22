@@ -6,14 +6,14 @@ agents:
   sandbox.jl: "true"
   os: "linux"
 steps:
-  - label: ":rocket: launch pipelines"
+  - label: ":rocket: sync logs"
     plugins:
       - staticfloat/cryptic#v1:
           variables:
             - S3_ACCESS_KEY="U2FsdGVkX1/H9b08vYfGLIy0xYlKBA+pkT5XAjh5XrQdd5XNbjyVFXhv2XRsG13h"
             - S3_SECRET_KEY="U2FsdGVkX1/YhdG5Jr9ywTjysCrjQIoAlfrVT8qMPzBoPttuG3NIMorn3LLcWpp657MEPhjib+MQ/At1qllwBg=="
           files:
-            - .buildkite/secrets/id_rsa
+            - ".buildkite/secrets/id_rsa"
       - staticfloat/ssh-agent:
           keyfiles:
             - .buildkite/secrets/id_rsa
@@ -28,6 +28,7 @@ steps:
       SERVERS=( $(curl -sfL https://pkg.julialang.org/meta/siblings | jq '.[]') )
 
       echo "Downloading logs from ${#SERVERS[@]} servers..."
+      set -x
       for IDX in $(seq 1 ${#SERVERS[@]}); do
         SERVER="$(curl -sfL "${SERVERS[${IDX}]}/meta/" | jq '.pkgserver_url')"
         echo " -> [$IDX/${#SERVERS[@]}] ${SERVER}"
