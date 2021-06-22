@@ -6,41 +6,43 @@ agents:
   sandbox.jl: "true"
   os: "linux"
 steps:
-  - label: ":rocket: launch pipelines"
+  - label: ":rocket: sync logs"
     plugins:
       - staticfloat/cryptic#v1:
           variables:
             - S3_ACCESS_KEY="U2FsdGVkX1/H9b08vYfGLIy0xYlKBA+pkT5XAjh5XrQdd5XNbjyVFXhv2XRsG13h"
             - S3_SECRET_KEY="U2FsdGVkX1/YhdG5Jr9ywTjysCrjQIoAlfrVT8qMPzBoPttuG3NIMorn3LLcWpp657MEPhjib+MQ/At1qllwBg=="
           files:
-            - .buildkite/secrets/id_rsa
+            - ".buildkite/secrets/id_rsa"
       - staticfloat/ssh-agent:
           keyfiles:
             - .buildkite/secrets/id_rsa
+      - JuliaCI/julia#v1:
+          version: "1.6"
+      - staticfloat/sandbox#v1:
+          rootfs_url: "https://github.com/JuliaCI/rootfs-images/releases/download/v1/pkgserver-logsync.tar.gz"
+          rootfs_treehash: "73efdb755348712bc640670871f413bd0f1a9d34"
     commands: |
-      echo "--- Install awscli"
-      apt install -y awscli || true
-
-      echo "+++ Download logs"
-      LOGSDIR=/tmp/logs
+      LOGSDIR=$${JULIA_DEPOT_PATH}/scratchspaces/736c6f6f-5473-6973-796c-616e41676f4c/logs-sync
+      mkdir -p "$${LOGSDIR}"
       
       # First, get list of servers
-      SERVERS=( $(curl -sfL https://pkg.julialang.org/meta/siblings | jq '.[]') )
+      SERVERS=( $$(curl -sfL https://pkg.julialang.org/meta/siblings | jq -r '.[]') )
 
-      echo "Downloading logs from ${#SERVERS[@]} servers..."
-      for IDX in $(seq 1 ${#SERVERS[@]}); do
-        SERVER="$(curl -sfL "${SERVERS[${IDX}]}/meta/" | jq '.pkgserver_url')"
-        echo " -> [$IDX/${#SERVERS[@]}] ${SERVER}"
+      echo "Downloading logs from $${#SERVERS[@]} servers..."
+      for IDX in $$(seq 1 $${#SERVERS[@]}); do
+        SERVER="$$(curl -sfL "$${SERVERS[$${IDX}]}/meta" | jq -r '.pkgserver_url' | sed -e 's&^https://&&')"
+        echo " -> [$$IDX/$${#SERVERS[@]}] $${SERVER}"
 
         USER=ubuntu
-        if [[ "${SERVER}" == cn-* ]]; then
+        if [[ "$${SERVER}" == cn-* ]]; then
           USER=centos
         fi
         # Ignore return code from `rsync` so that we can skip failing servers
-        rsync -Pav -e "ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no" \
-                      "${USER}@${SERVER}:~/src/PkgServer.jl/deployment/logs/nginx/access_*.gz" \
-                      "${LOGSDIR}" || true
+        rsync -Prtv -e "ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -oBatchMode=yes" \
+                      "$${USER}@$${SERVER}:~/src/PkgServer.jl/deployment/logs/nginx/access_*.gz" \
+                      "$${LOGSDIR}" || true
       done
 
       # Next, we're going to upload these logs to S3:
-      aws s3 sync "${LOGSDIR}" "s3://julialang-logs/pkgservers"
+      aws s3 sync "$${LOGSDIR}" "s3://julialang-logs/pkgservers"
