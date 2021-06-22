@@ -10,8 +10,8 @@ steps:
     plugins:
       - staticfloat/cryptic#v1:
           variables:
-            - S3_ACCESS_KEY="U2FsdGVkX1/H9b08vYfGLIy0xYlKBA+pkT5XAjh5XrQdd5XNbjyVFXhv2XRsG13h"
-            - S3_SECRET_KEY="U2FsdGVkX1/YhdG5Jr9ywTjysCrjQIoAlfrVT8qMPzBoPttuG3NIMorn3LLcWpp657MEPhjib+MQ/At1qllwBg=="
+            - AWS_ACCESS_KEY_ID="U2FsdGVkX1/H9b08vYfGLIy0xYlKBA+pkT5XAjh5XrQdd5XNbjyVFXhv2XRsG13h"
+            - AWS_SECRET_ACCESS_KEY="U2FsdGVkX1/YhdG5Jr9ywTjysCrjQIoAlfrVT8qMPzBoPttuG3NIMorn3LLcWpp657MEPhjib+MQ/At1qllwBg=="
           files:
             - ".buildkite/secrets/id_rsa"
       - staticfloat/ssh-agent:
@@ -30,7 +30,7 @@ steps:
       SERVERS=( $$(curl -sfL https://pkg.julialang.org/meta/siblings | jq -r '.[]') )
 
       echo "Downloading logs from $${#SERVERS[@]} servers..."
-      for IDX in $$(seq 1 $${#SERVERS[@]}); do
+      for IDX in $${!SERVERS[@]}; do
         SERVER="$$(curl -sfL "$${SERVERS[$${IDX}]}/meta" | jq -r '.pkgserver_url' | sed -e 's&^https://&&')"
         echo " -> [$$IDX/$${#SERVERS[@]}] $${SERVER}"
 
