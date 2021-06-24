@@ -87,7 +87,7 @@ function parse_logfiles(;criteria::Function = f -> is_access_log(f) && is_recent
     work_queue = Channel{String}(length(logfiles))
     put!.(Ref(work_queue), logfiles)
     close(work_queue)
-    Threads.foreach(work_queue) do f
+    Threads.foreach(work_queue; ntasks=2*Threads.nthreads()) do f
         d = parse_file(f)
         if collect_results
             lock(results_lock) do
