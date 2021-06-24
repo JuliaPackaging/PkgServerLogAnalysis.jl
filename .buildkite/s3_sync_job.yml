@@ -17,12 +17,18 @@ steps:
       - staticfloat/ssh-agent:
           keyfiles:
             - .buildkite/secrets/id_rsa
+
+      # Install Julia for sandbox
       - JuliaCI/julia#v1:
           version: "1.6"
           persist_depo_dirs: registries,packages,artifacts,compiled,scratchspaces
-      - staticfloat/sandbox#v1:
+      - staticfloat/sandbox:
           rootfs_url: "https://github.com/JuliaCI/rootfs-images/releases/download/v1/pkgserver-logsync.tar.gz"
           rootfs_treehash: "73efdb755348712bc640670871f413bd0f1a9d34"
+          workspaces:
+            - "$${BUILDKITE_PLUGIN_JULIA_CACHE_DIR}:$${BUILDKITE_PLUGIN_JULIA_CACHE_DIR}"
+          verbose: "true"
+
     commands: |
       echo "--- Setup"
       LOG_DIR=$${JULIA_DEPOT_PATH}/scratchspaces/736c6f6f-5473-6973-796c-616e41676f4c/logs
