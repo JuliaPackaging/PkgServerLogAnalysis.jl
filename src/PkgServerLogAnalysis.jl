@@ -82,7 +82,11 @@ function parse_logfiles(;criteria::Function = f -> is_access_log(f) && is_recent
                         collect_results::Bool = true)
     results_lock = ReentrantLock()
     parsed = []
-    Threads.@threads for f in filter(criteria, readdir(dir; join=true))
+
+    logfiles = filter(criteria, readdir(dir; join=true))
+    work_queue = Channel{String}(length(logfiles))
+    put!.(Ref(work_queue), logfiles)
+    Threads.foreach(work_queue) do f
         d = parse_file(f)
         if collect_results
             lock(results_lock) do
