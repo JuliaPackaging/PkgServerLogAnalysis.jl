@@ -24,11 +24,16 @@ steps:
           rootfs_url: "https://github.com/JuliaCI/rootfs-images/releases/download/v1/pkgserver-logsync.tar.gz"
           rootfs_treehash: "73efdb755348712bc640670871f413bd0f1a9d34"
     commands: |
-      LOGSDIR=$${JULIA_DEPOT_PATH}/scratchspaces/736c6f6f-5473-6973-796c-616e41676f4c/logs-sync
-      mkdir -p "$${LOGSDIR}"
+      echo "--- Setup"
+      LOG_DIR=$${JULIA_DEPOT_PATH}/scratchspaces/736c6f6f-5473-6973-796c-616e41676f4c/logs
+      CSV_DIR=$${JULIA_DEPOT_PATH}/scratchspaces/736c6f6f-5473-6973-796c-616e41676f4c/csv_cache
+      mkdir -p "$${LOG_DIR}" "$${CSV_DIR}"
       
-      # First, get list of servers
+      # Get list of servers
       SERVERS=( $$(curl -sfL https://pkg.julialang.org/meta/siblings | jq -r '.[]') )
+
+      # Instantiate our project
+      julia --project -e 'import Pkg; Pkg.instantiate()'
 
       echo "+++ Downloading logs from $${#SERVERS[@]} servers"
       for IDX in $${!SERVERS[@]}; do
@@ -42,12 +47,15 @@ steps:
         # Ignore return code from `rsync` so that we can skip failing servers
         (rsync -Prt -e "ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -oBatchMode=yes" \
                       "$${USER}@$${SERVER}:~/src/PkgServer.jl/deployment/logs/nginx/access_*.gz" \
-                      "$${LOGSDIR}" || true) &
+                      "$${LOG_DIR}" || true) &
       done
 
       # Wait for all those `rsync` commands to finish
       wait
 
-      # Next, we're going to upload these logs to S3:
-      echo "+++ Uploading to S3"
-      aws s3 sync "$${LOGSDIR}" "s3://julialang-logs/pkgservers"
+      echo "+++ Parsing into `.csv.zst` files"
+      julia --project bin/convert_to_csv.jl
+
+      echo "+++ Uploading raw logs and parsed CSV files to S3"
+      aws s3 sync "$${LOG_DIR}" "s3://julialang-logs/pkgservers/raw/"
+      aws s3 sync "$${CSV_DIR}" "s3://julialang-logs/pkgservers/csv/"

@@ -9,7 +9,7 @@ include("compression.jl")
 include("parsing.jl")
 
 function hit_filecache(collator::Function, src_filename::String, cleanup::Bool = true)
-    dst_filename = joinpath(@get_scratch!("csv_cache"), string(bytes2hex(sha256(src_filename)[1:div(end,2)]), ".csvz"))
+    dst_filename = joinpath(@get_scratch!("csv_cache"), string(bytes2hex(sha256(src_filename)[1:div(end,2)]), ".csv.zst"))
     if stat(dst_filename).mtime < stat(src_filename).mtime
         try
             @info("Parsing $(basename(src_filename))")
@@ -77,14 +77,17 @@ end
 
 # By default, we look at one week of data plus two days, since we usually throw out
 # the first and last days, to account for bad timezone overlaps.
-function parse_logfiles(criteria::Function = f -> is_access_log(f) && is_recent(f, 31+2),
-                        dir::AbstractString = @get_scratch!("logs"))
+function parse_logfiles(;criteria::Function = f -> is_access_log(f) && is_recent(f, 31+2),
+                        dir::AbstractString = @get_scratch!("logs"),
+                        collect_results::Bool = true)
     results_lock = ReentrantLock()
     parsed = []
     Threads.@threads for f in filter(criteria, readdir(dir; join=true))
         d = parse_file(f)
-        lock(results_lock) do
-            append!(parsed, d)
+        if collect_results
+            lock(results_lock) do
+                append!(parsed, d)
+            end
         end
     end
     return parsed
