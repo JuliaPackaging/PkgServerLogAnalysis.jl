@@ -43,7 +43,11 @@ steps:
 
       echo "+++ Downloading logs from $${#SERVERS[@]} servers"
       for IDX in $${!SERVERS[@]}; do
-        SERVER="$$(curl -sfL "$${SERVERS[$${IDX}]}/meta" | jq -r '.pkgserver_url' | sed -e 's&^https://&&')"
+        SERVER="$$(curl -sfL "$${SERVERS[$${IDX}]}/meta" | jq -r '.pkgserver_url' | sed -e 's&^https://&&')" || true
+        if [[ -z "${SERVER}" ]]; then
+          buildkite-agent annotate --style 'error' "Server $${SERVERS[$${IDX}] could not self-identify!"
+          continue
+        fi
         echo " -> [$$IDX/$${#SERVERS[@]}] $${SERVER}"
 
         USER=ubuntu
