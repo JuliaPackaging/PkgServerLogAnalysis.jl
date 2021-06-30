@@ -35,14 +35,14 @@ function hit_filecache(collator::Function, src_filename::String, cleanup::Bool =
         open(dst_filename) do io
             decompress!(io, decomp_io)
         end
+        return CSV.File(read(decomp_io))
     catch
-        @error("Decompressing $(dst_filename) failed, re-parsing!")
+        @error("Decompressing and parsing $(dst_filename) failed, re-parsing!")
         rm(dst_filename)
         return hit_filecache(collator, src_filename, cleanup)
     finally
         close(decomp_io)
     end
-    return CSV.File(read(decomp_io))
 end
 
 function parse_file(filename::AbstractString)
