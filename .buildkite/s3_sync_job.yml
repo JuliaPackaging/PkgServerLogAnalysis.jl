@@ -70,7 +70,7 @@ steps:
 
       echo "--- Checking which logfiles need to be parsed"
       function s3_csv_exists() {
-        aws s3api head-object --bucket julialang-logs --key pkgservers/csv/$${1}.zst >/dev/null 2>/dev/null
+        aws s3api head-object --bucket julialang-logs --key pkgservers/csv/$${1%.*}.csv.zst >/dev/null 2>/dev/null
       }
 
       LOGS_TO_PARSE=()
@@ -89,6 +89,6 @@ steps:
 
       echo "+++ Uploading '.csv.zst' files to S3"
       for f in "$${LOGS_TO_PARSE[@]}"; do
-        bf="$$(basename $${f})"
-        aws s3 cp --acl=private "$${CSV_DIR}/$${bf}.zst" "s3://julialang-logs/pkgservers/csv/$${bf}.zst"
+        bf="$$(basename $${f%.*})"
+        aws s3 cp --acl=private "$${CSV_DIR}/$${bf}.csv.zst" "s3://julialang-logs/pkgservers/csv/$${bf}.csv.zst"
       done
