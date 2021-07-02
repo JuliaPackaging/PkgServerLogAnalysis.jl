@@ -55,7 +55,9 @@ steps:
           USER=centos
         fi
         # Ignore return code from `rsync` so that we can skip failing servers
-        (rsync -Prt -e "ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -oBatchMode=yes" \
+        # Also limit each transfer to 120s, so that we don't end up eating huge amounts of
+        # CI time if a chinese server is feeling particularly slow today
+        (timeout 120s rsync -Prt -e "ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -oBatchMode=yes" \
                       "$${USER}@$${SERVER}:~/src/PkgServer.jl/deployment/logs/nginx/access_*.gz" \
                       "$${LOG_DIR}" || true) &
       done
