@@ -70,12 +70,12 @@ steps:
 
       echo "--- Checking which logfiles need to be parsed"
       function s3_csv_exists() {
-        aws s3api head-object --bucket julialang-logs --key pkgservers/csv/$${1%.*}.csv.zst >/dev/null 2>/dev/null
+        aws s3api head-object --bucket julialang-logs --key pkgservers/csv/$$1.csv.zst >/dev/null 2>/dev/null
       }
 
       LOGS_TO_PARSE=()
       for f in $${LOG_DIR}/*.gz; do
-        if ! s3_csv_exists "$$(basename "$${f}")"; then
+        if ! s3_csv_exists "$$(basename "$${f%.*}")"; then
           LOGS_TO_PARSE+=( "$${f}" )
           echo -n "!"
         else
