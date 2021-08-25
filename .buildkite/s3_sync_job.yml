@@ -28,6 +28,7 @@ steps:
           workspaces:
             - "$${BUILDKITE_PLUGIN_JULIA_CACHE_DIR}:$${BUILDKITE_PLUGIN_JULIA_CACHE_DIR}"
           verbose: "true"
+    timeout_in_minutes: 240
 
     commands: |
       echo "--- Setup"
