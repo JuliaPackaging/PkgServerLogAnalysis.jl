@@ -42,11 +42,11 @@ steps:
       echo "--- Setup"
       mkdir -p "$${LOG_DIR}"
 
-      echo "--- curl -sfL https://pkg.julialang.org/meta/siblings"
-      curl -sfL https://pkg.julialang.org/meta/siblings
+      echo "--- curl -vL https://pkg.julialang.org/meta/siblings"
+      curl -vL https://pkg.julialang.org/meta/siblings
 
-      echo "--- curl -sfL https://pkg.julialang.org/meta/siblings | jq -r '.[]'"
-      curl -sfL https://pkg.julialang.org/meta/siblings | jq -r '.[]'
+      echo "--- curl -vL https://pkg.julialang.org/meta/siblings | jq -r '.[]'"
+      curl -vL https://pkg.julialang.org/meta/siblings | jq -r '.[]'
 
       echo "--- Get list of servers"
       SERVERS=( $$(curl -sfL https://pkg.julialang.org/meta/siblings | jq -r '.[]') )
