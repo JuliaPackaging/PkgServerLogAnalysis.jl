@@ -1,26 +1,52 @@
 using HTTP, JSON3
 
 function get_server_list()
-    # Get the server list from the current default pkgserver
-    siblings = replace.(JSON3.read(HTTP.get("https://pkg.julialang.org/meta/siblings").body), "https://" => "")
+    function interrogate_server(server::String)
+        # First, check to see if this server has any children
+        children = try
+            JSON3.read(HTTP.get(string(server, "/meta/children")).body)
+        catch
+            String[]
+        end
 
-    # Go and ask each indifvidual sibling what it thinks its canonical URL is, in the case of redirects
-    c = Channel(length(siblings))
-    @info("Canonicalizing $(length(siblings)) server hostnames...")
-    @sync for sibling in siblings
-        @async begin
-            @info(sibling)
-            try
-                meta = JSON3.read(HTTP.get("https://$(sibling)/meta").body)
-                put!(c, replace(meta["pkgserver_url"], "https://" => ""))
-            catch
-                @warn("Unable to canonicalize", sibling)
-                put!(c, sibling)
+        future_servers_to_interrogate = String[]
+        canonical_servers = String[]
+
+        # If we have children, we know we're a loadbalancer, so just use this URL as the canonical address:
+        if !isempty(children)
+            future_servers_to_interrogate = collect(children)
+            canonical_servers = String[server]
+        else
+            # If we're not a loadbalancer, get our canonical address from `/meta`:
+            meta = JSON3.read(HTTP.get(string(server, "/meta")).body)
+            canonical_servers = String[meta["pkgserver_url"]]
+        end
+
+        return future_servers_to_interrogate, canonical_servers
+    end
+
+    # Get the initial sibling list from the current default pkgserver
+    servers_to_interrogate = JSON3.read(HTTP.get("https://pkg.julialang.org/meta/siblings").body)
+
+    servers = Channel{String}(10*length(servers_to_interrogate))
+    while !isempty(servers_to_interrogate)
+        next_servers_to_interrogate = Channel{String}(10*length(servers_to_interrogate))
+
+        # For each server we need to interrogate, launch a task in parallel
+        @sync begin
+            for server in servers_to_interrogate
+                @async begin
+                    new_servers, done_servers = interrogate_server(server)
+                    put!.(Ref(next_servers_to_interrogate), new_servers)
+                    put!.(Ref(servers), done_servers)
+                end
             end
         end
+        close(next_servers_to_interrogate)
+        servers_to_interrogate = collect(next_servers_to_interrogate)
     end
-    close(c)
-    return collect(c)
+    close(servers)
+    return sort(collect(servers))
 end
 
 """
