@@ -31,9 +31,15 @@ steps:
     timeout_in_minutes: 240
 
     commands: |
-      echo "--- Setup"
+      echo "--- LOG_DIR"
       LOG_DIR=$${JULIA_DEPOT_PATH}/scratchspaces/736c6f6f-5473-6973-796c-616e41676f4c/logs
+      echo $$LOG_DIR
+
+      echo "--- CSV_DIR"
       CSV_DIR=$${JULIA_DEPOT_PATH}/scratchspaces/736c6f6f-5473-6973-796c-616e41676f4c/csv_cache
+      echo $$CSV_DIR
+
+      echo "--- Setup"
       mkdir -p "$${LOG_DIR}"
 
       echo "--- curl -sfL https://pkg.julialang.org/meta/siblings"
