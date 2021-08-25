@@ -35,11 +35,17 @@ steps:
       LOG_DIR=$${JULIA_DEPOT_PATH}/scratchspaces/736c6f6f-5473-6973-796c-616e41676f4c/logs
       CSV_DIR=$${JULIA_DEPOT_PATH}/scratchspaces/736c6f6f-5473-6973-796c-616e41676f4c/csv_cache
       mkdir -p "$${LOG_DIR}"
-      
-      # Get list of servers
+
+      echo "--- curl -sfL https://pkg.julialang.org/meta/siblings"
+      curl -sfL https://pkg.julialang.org/meta/siblings
+
+      echo "--- curl -sfL https://pkg.julialang.org/meta/siblings | jq -r '.[]'"
+      curl -sfL https://pkg.julialang.org/meta/siblings | jq -r '.[]'
+
+      echo "--- Get list of servers"
       SERVERS=( $$(curl -sfL https://pkg.julialang.org/meta/siblings | jq -r '.[]') )
 
-      # Instantiate our project
+      echo "--- Instantiate our project"
       julia --project -e 'import Pkg; Pkg.instantiate()'
 
       echo "+++ Downloading logs from $${#SERVERS[@]} servers"
