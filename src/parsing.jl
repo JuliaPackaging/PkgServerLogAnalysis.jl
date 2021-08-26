@@ -63,11 +63,16 @@ const mondo_pieces = [
     field("julia_interactive", raw"[^ ]+"; allow_dash=true),
     # $julia_pkg_server; the original Pkg server attempting to be contacted
     field("julia_pkg_server", raw"[^ ]+"; quoted=true, allow_dash=true),
+    # $request_id; the loadbalancer-sourced random request ID, for tracing requests through the system
+    field("request_id", raw"[^ ]+"; quoted=true, allow_dash=true),
+    # $cache_miss; if this was a cache miss, it will be "miss", otherwise it will be "-"
+    field("cache_miss", raw"miss"; quoted=true, allow_dash=true),
 ]
 const mondo_regex = Regex(string("^", join(mondo_pieces, " "), "\$"))
 
 function Base.keys(r::Regex)
-    Symbol[Symbol(x[2]) for x in Base.PCRE.capture_names(r.regex)]
+    names_mapping = [(idx, Symbol(name)) for (idx, name) in Base.PCRE.capture_names(r.regex)]
+    return Symbol[x[2] for x in sort(names_mapping, by=((idx, name),) -> idx)]
 end
 const mondo_capture_groups = keys(mondo_regex)
 
