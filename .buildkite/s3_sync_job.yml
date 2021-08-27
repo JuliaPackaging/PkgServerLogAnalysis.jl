@@ -32,24 +32,20 @@ steps:
 
     commands: |
       echo "--- Setup"
-      LOG_DIR=$${JULIA_DEPOT_PATH}/scratchspaces/736c6f6f-5473-6973-796c-616e41676f4c/logs
-      CSV_DIR=$${JULIA_DEPOT_PATH}/scratchspaces/736c6f6f-5473-6973-796c-616e41676f4c/csv_cache
+      LOG_DIR=$${JULIA_DEPOT_PATH}/scratchspaces/736c6f6f-5473-6973-796c-616e41676f4c/raw_logs
+      CSV_DIR=$${JULIA_DEPOT_PATH}/scratchspaces/736c6f6f-5473-6973-796c-616e41676f4c/raw_csvs
       SANITIZED_CSV_DIR=$${JULIA_DEPOT_PATH}/scratchspaces/736c6f6f-5473-6973-796c-616e41676f4c/sanitized_csvs
       mkdir -p "$${LOG_DIR}"
       
       # Get list of servers
-      SERVERS=( $$(curl -sfL https://pkg.julialang.org/meta/siblings | jq -r '.[]') )
+      SERVERS=( $$(julia --project bin/get_server_list.jl) )
 
       # Instantiate our project
       julia --project -e 'import Pkg; Pkg.instantiate()'
 
       echo "+++ Downloading logs from $${#SERVERS[@]} servers"
       for IDX in $${!SERVERS[@]}; do
-        SERVER="$$(curl -sfL "$${SERVERS[$${IDX}]}/meta" | jq -r '.pkgserver_url' | sed -e 's&^https://&&')" || true
-        if [[ -z "$${SERVER}" ]]; then
-          buildkite-agent annotate --style error "Server $${SERVERS[$${IDX}]} could not self-identify!"
-          continue
-        fi
+        SERVER="$$(echo "$${SERVERS[$${IDX}]}" | sed -e 's&^https://&&')"
         echo " -> [$$IDX/$${#SERVERS[@]}] $${SERVER}"
 
         USER=ubuntu
