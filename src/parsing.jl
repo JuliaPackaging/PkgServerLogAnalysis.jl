@@ -176,7 +176,7 @@ function parse_log_line(line::AbstractString, filename::AbstractString="")
                 prev_match = match(prev_regex, line)
                 if prev_match !== nothing
                     next_token = first(split(line[max(length(prev_match.match),1):end]))
-                    @warn("Unable to parse", line, next_token, prev_match, idx, mondo_pieces[idx], filename, once; maxlog=4)
+                    @warn("Unable to parse", line, next_token, prev_match, idx, mondo_pieces[idx], filename, maxlog=4)
                     break
                 end
 
