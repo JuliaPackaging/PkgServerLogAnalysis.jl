@@ -30,6 +30,10 @@ function hit_filecache(collator::Function, src_filename::String, cleanup::Bool =
 
     # If it already exists, decompress it into a CSV.File
     @info("Loading cached $(dst_filename)")
+    if filesize(dst_filename) == 0
+        return NamedTuple[]
+    end
+
     decomp_io = BufferStream()
     try
         open(dst_filename) do io
