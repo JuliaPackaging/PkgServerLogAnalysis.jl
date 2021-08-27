@@ -64,26 +64,31 @@ steps:
       wait
 
       echo "--- Uploading raw (gzip-compressed) logs to S3 (these expire after 30 days)"
+      GZIPPED_RAW_LOGS=( $${LOG_DIR}/*.gz )
       aws s3 sync --acl=private "$${LOG_DIR}" "s3://julialang-pkgserver-logs/raw/"
 
-      echo "--- Checking which logfiles need to be parsed"
-      function s3_csv_zst_exists() {
-        aws s3api head-object --bucket julialang-pkgserver-logs-sanitized --key csv/$$1 >/dev/null 2>/dev/null
+      echo "--- Checking which of the $${#GZIPPED_RAW_LOGS[@]} logfiles need to be parsed"
+      LOGS_TO_PARSE_LOCKFILE=$$(mktemp)
+      LOGS_TO_PARSE_FILE=$$(mktemp)
+      function check_s3_csv_zst_exists() {
+        local key="csv/$$(basename $${1%.*}).csv.zst"
+        if ! aws s3api head-object --bucket julialang-pkgserver-logs-sanitized --key $${key} >/dev/null 2>/dev/null; then
+          (
+            flock -x 200
+            echo "$$1" >> "$${LOGS_TO_PARSE_FILE}"
+          )  200>$${LOGS_TO_PARSE_LOCKFILE}
+        fi
       }
 
-      LOGS_TO_PARSE=()
-      CSVS_TO_SANITIZE=()
-      for f in $${LOG_DIR}/*.gz; do
-        csv_zst_name="$$(basename $${f%.*}).csv.zst"
-        if ! s3_csv_zst_exists "$${csv_zst_name}"; then
-          LOGS_TO_PARSE+=( "$${f}" )
-          CSVS_TO_SANITIZE+=( "$${CSV_DIR}/$${csv_zst_name}" )
-          echo -n "!"
-        else
-          echo -n "."
-        fi
+      # Launch parallel jobs to probe existence of .csv.zst files on s3
+      for f in $${GZIPPED_RAW_LOGS[@]}; do
+        check_s3_csv_zst_exists "$${f}" &
       done
-      echo
+      wait
+
+      # Read in the identified logs to parse
+      LOGS_TO_PARSE=( $$(cat $${LOGS_TO_PARSE_FILE}) )
+      rm -f $${LOGS_TO_PARSE_FILE} $${LOGS_TO_PARSE_LOCKFILE}
 
       echo "+++ Parsing $${#LOGS_TO_PARSE[@]} logfiles"
       julia --project bin/parse_logfiles.jl "$${LOGS_TO_PARSE[@]}"
