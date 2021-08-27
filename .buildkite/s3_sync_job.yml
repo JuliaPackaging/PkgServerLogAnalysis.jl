@@ -23,8 +23,8 @@ steps:
           version: "1.6"
           persist_depo_dirs: registries,packages,artifacts,compiled,scratchspaces
       - staticfloat/sandbox:
-          rootfs_url: "https://github.com/JuliaCI/rootfs-images/releases/download/v1/pkgserver-logsync.tar.gz"
-          rootfs_treehash: "73efdb755348712bc640670871f413bd0f1a9d34"
+          rootfs_url: "https://github.com/JuliaCI/rootfs-images/releases/download/v3.14/pkgserver_logsync.x86_64.tar.gz"
+          rootfs_treehash: "d2566c22a9bb357042e1135cf968e2c7fd32a54a"
           workspaces:
             - "$${BUILDKITE_PLUGIN_JULIA_CACHE_DIR}:$${BUILDKITE_PLUGIN_JULIA_CACHE_DIR}"
           verbose: "true"
@@ -34,6 +34,7 @@ steps:
       echo "--- Setup"
       LOG_DIR=$${JULIA_DEPOT_PATH}/scratchspaces/736c6f6f-5473-6973-796c-616e41676f4c/logs
       CSV_DIR=$${JULIA_DEPOT_PATH}/scratchspaces/736c6f6f-5473-6973-796c-616e41676f4c/csv_cache
+      SANITIZED_CSV_DIR=$${JULIA_DEPOT_PATH}/scratchspaces/736c6f6f-5473-6973-796c-616e41676f4c/sanitized_csvs
       mkdir -p "$${LOG_DIR}"
       
       # Get list of servers
@@ -66,18 +67,21 @@ steps:
       # Wait for all those `rsync` commands to finish
       wait
 
-      echo "+++ Uploading raw (gzip-compressed) logs to S3"
-      aws s3 sync --acl=private "$${LOG_DIR}" "s3://julialang-logs/pkgservers/raw/"
+      echo "+++ Uploading raw (gzip-compressed) logs to S3 (these expire after 30 days)"
+      aws s3 sync --acl=private "$${LOG_DIR}" "s3://julialang-pkgserver-logs/raw/"
 
       echo "--- Checking which logfiles need to be parsed"
-      function s3_csv_exists() {
-        aws s3api head-object --bucket julialang-logs --key pkgservers/csv/$$1.csv.zst >/dev/null 2>/dev/null
+      function s3_csv_zst_exists() {
+        aws s3api head-object --bucket julialang-logs --key pkgservers/csv/$$1 >/dev/null 2>/dev/null
       }
 
       LOGS_TO_PARSE=()
+      CSVS_TO_SANITIZE=()
       for f in $${LOG_DIR}/*.gz; do
-        if ! s3_csv_exists "$$(basename "$${f%.*}")"; then
+        csv_zst_name="$$(basename $${f%.*}).csv.zst"
+        if ! s3_csv_zst_exists "$${csv_zst_name}"; then
           LOGS_TO_PARSE+=( "$${f}" )
+          CSVS_TO_SANITIZE+=( "$${CSV_DIR}/$${csv_zst_name}" )
           echo -n "!"
         else
           echo -n "."
@@ -88,8 +92,16 @@ steps:
       echo "+++ Parsing $${#LOGS_TO_PARSE[@]} logfiles"
       julia --project bin/parse_logfiles.jl "$${LOGS_TO_PARSE[@]}"
 
+      echo "+++ Sanitizing newly-created CSVs"
+      julia --project bin/sanitize_csvs.jl "$${SANITIZED_CSV_DIR}" "$${CSVS_TO_SANITIZE[@]}"
+
       echo "+++ Uploading '.csv.zst' files to S3"
       for f in "$${LOGS_TO_PARSE[@]}"; do
-        bf="$$(basename $${f%.*})"
-        aws s3 cp --acl=private "$${CSV_DIR}/$${bf}.csv.zst" "s3://julialang-logs/pkgservers/csv/$${bf}.csv.zst"
+        csv_zst_name="$$(basename $${f%.*}).csv.zst"
+
+        # Upload raw `.csv.zst` file; this gets deleted after 30 days
+        aws s3 cp --acl=private "$${CSV_DIR}/$${csv_zst_name}" "s3://julialang-pkgserver-logs/csv/$${csv_zst_name}"
+
+        # Upload sanitized `.csv.zst` file; this stays forever
+        aws s3 cp --acl=private "$${SANITIZED_CSV_DIR}/$${csv_zst_name}" "s3://julialang-pkgserver-logs-sanitized/csv/$${csv_zst_name}"
       done
