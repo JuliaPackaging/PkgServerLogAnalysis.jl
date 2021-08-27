@@ -10,7 +10,9 @@ include("parsing.jl")
 
 function hit_filecache(collator::Function, src_filename::String, cleanup::Bool = true)
     dst_filename = joinpath(@get_scratch!("raw_csvs"), string(splitext(basename(src_filename))[1], ".csv.zst"))
+    had_to_parse = false
     if stat(dst_filename).mtime < stat(src_filename).mtime
+        had_to_parse = true
         try
             @info("Parsing $(basename(src_filename))")
             data = open(io -> collator(io), src_filename)
@@ -29,7 +31,9 @@ function hit_filecache(collator::Function, src_filename::String, cleanup::Bool =
     end
 
     # If it already exists, decompress it into a CSV.File
-    @info("Loading cached $(dst_filename)")
+    if !had_to_parse
+        @info("Loading cached $(dst_filename)")
+    end
     if filesize(dst_filename) == 0
         return NamedTuple[]
     end
