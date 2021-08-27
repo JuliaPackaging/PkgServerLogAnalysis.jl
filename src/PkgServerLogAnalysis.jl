@@ -9,7 +9,7 @@ include("compression.jl")
 include("parsing.jl")
 
 function hit_filecache(collator::Function, src_filename::String, cleanup::Bool = true)
-    dst_filename = joinpath(@get_scratch!("csv_cache"), string(splitext(basename(src_filename))[1], ".csv.zst"))
+    dst_filename = joinpath(@get_scratch!("raw_csvs"), string(splitext(basename(src_filename))[1], ".csv.zst"))
     if stat(dst_filename).mtime < stat(src_filename).mtime
         try
             @info("Parsing $(basename(src_filename))")
