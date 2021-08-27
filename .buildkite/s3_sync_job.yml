@@ -31,7 +31,7 @@ steps:
     timeout_in_minutes: 240
 
     commands: |
-      echo "--- Setup"
+      echo "--- Instantiate project"
       LOG_DIR=$${JULIA_DEPOT_PATH}/scratchspaces/736c6f6f-5473-6973-796c-616e41676f4c/raw_logs
       CSV_DIR=$${JULIA_DEPOT_PATH}/scratchspaces/736c6f6f-5473-6973-796c-616e41676f4c/raw_csvs
       SANITIZED_CSV_DIR=$${JULIA_DEPOT_PATH}/scratchspaces/736c6f6f-5473-6973-796c-616e41676f4c/sanitized_csvs
@@ -43,7 +43,7 @@ steps:
       # Get list of servers
       SERVERS=( $$(julia --project bin/get_server_list.jl) )
 
-      echo "+++ Downloading logs from $${#SERVERS[@]} servers"
+      echo "--- Downloading logs from $${#SERVERS[@]} servers"
       for IDX in $${!SERVERS[@]}; do
         SERVER="$$(echo "$${SERVERS[$${IDX}]}" | sed -e 's&^https://&&')"
         echo " -> [$$IDX/$${#SERVERS[@]}] $${SERVER}"
@@ -63,12 +63,12 @@ steps:
       # Wait for all those `rsync` commands to finish
       wait
 
-      echo "+++ Uploading raw (gzip-compressed) logs to S3 (these expire after 30 days)"
+      echo "--- Uploading raw (gzip-compressed) logs to S3 (these expire after 30 days)"
       aws s3 sync --acl=private "$${LOG_DIR}" "s3://julialang-pkgserver-logs/raw/"
 
       echo "--- Checking which logfiles need to be parsed"
       function s3_csv_zst_exists() {
-        aws s3api head-object --bucket julialang-logs --key pkgservers/csv/$$1 >/dev/null 2>/dev/null
+        aws s3api head-object --bucket julialang-pkgserver-logs-sanitized --key csv/$$1 >/dev/null 2>/dev/null
       }
 
       LOGS_TO_PARSE=()
