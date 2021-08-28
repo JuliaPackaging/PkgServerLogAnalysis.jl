@@ -20,15 +20,20 @@ for filename in ARGS
             @info("Sanitizing $(basename(filename))")
             # Decompress/read the `.csv.zst` into memory
             decompressed_io = BufferStream()
-            @async decompress!(compressed_io, decompressed_io)
+            decompress!(compressed_io, decompressed_io)
+
+            @info("decompressed")
 
             # Purposefully drop `remote_addr`; this is part of our "sanitization" process
             sanitized_data = CSV.File(read(decompressed_io); drop=["remote_addr"])
+            @info("dropped")
 
             # Re-compress the file back out onto disk
             comp_io = BufferStream()
             CSV.write(comp_io, sanitized_data)
+            @info("written")
             compress!(comp_io, write_io)
+            @info("compressed")
             close(comp_io)
         end
     end
