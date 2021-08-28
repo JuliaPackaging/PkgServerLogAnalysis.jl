@@ -9,28 +9,27 @@ if ispath(output_dir) && !isdir(output_dir)
 end
 mkpath(output_dir)
 
-work_queue = Channel{String}(length(ARGS))
-put!.(Ref(work_queue), ARGS)
-close(work_queue)
-Threads.foreach(work_queue; ntasks=Threads.nthreads()) do filename
+#work_queue = Channel{String}(length(ARGS))
+#put!.(Ref(work_queue), ARGS)
+#close(work_queue)
+#Threads.foreach(work_queue; ntasks=Threads.nthreads()) do filename
+for filename in ARGS
     outfile = joinpath(output_dir, basename(filename))
     open(outfile, write=true) do write_io
         open(filename, read=true) do compressed_io
             @info("Sanitizing $(basename(filename))")
             # Decompress/read the `.csv.zst` into memory
             decompressed_io = BufferStream()
-            t_decomp = @async decompress!(compressed_io, decompressed_io)
+            @async decompress!(compressed_io, decompressed_io)
 
             # Purposefully drop `remote_addr`; this is part of our "sanitization" process
             sanitized_data = CSV.File(read(decompressed_io); drop=["remote_addr"])
-            wait(t_decomp)
 
             # Re-compress the file back out onto disk
             comp_io = BufferStream()
-            t_comp = @async compress!(comp_io, write_io)
             CSV.write(comp_io, sanitized_data)
+            compress!(comp_io, write_io)
             close(comp_io)
-            wait(t_comp)
         end
     end
 end
