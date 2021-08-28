@@ -94,10 +94,14 @@ steps:
       julia --project bin/parse_logfiles.jl "$${LOGS_TO_PARSE[@]}"
 
       echo "+++ Sanitizing newly-created CSVs"
+      CSVS_TO_SANITIZE=()
+      for f in $${LOGS_TO_PARSE[@]}; do
+        CSVS_TO_SANITIZE+=( "$${CSV_DIR}/$$(basename $${f%.*}).csv.zst" )
+      done
       julia --project bin/sanitize_csvs.jl "$${SANITIZED_CSV_DIR}" "$${CSVS_TO_SANITIZE[@]}"
 
       echo "+++ Uploading '.csv.zst' files to S3"
-      for f in "$${LOGS_TO_PARSE[@]}"; do
+      for f in $${LOGS_TO_PARSE[@]}; do
         csv_zst_name="$$(basename $${f%.*}).csv.zst"
 
         # Upload raw `.csv.zst` file; this gets deleted after 30 days
