@@ -21,6 +21,7 @@ for filename in ARGS
         # Decompress/read the `.csv.zst` into memory
         decompress!(compressed_io, decompressed_io)
     end
+    close(decompressed_io)
     @info("decompressed")
 
     # Purposefully drop `remote_addr`; this is part of our "sanitization" process
