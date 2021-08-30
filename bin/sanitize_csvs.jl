@@ -13,7 +13,7 @@ mkpath(output_dir)
 #put!.(Ref(work_queue), ARGS)
 #close(work_queue)
 #Threads.foreach(work_queue; ntasks=Threads.nthreads()) do filename
-for filename in ARGS
+for filename in sort(ARGS)
     outfile = joinpath(output_dir, basename(filename))
     @info("Sanitizing $(basename(filename))")
     decompressed_io = BufferStream()
@@ -24,13 +24,11 @@ for filename in ARGS
     close(decompressed_io)
 
     # Purposefully drop `remote_addr`; this is part of our "sanitization" process
-    sanitized_data = CSV.File(read(decompressed_io); drop=["remote_addr"])
-
-    # Re-compress the file back out onto disk
     comp_io = BufferStream()
-    CSV.write(comp_io, sanitized_data)
+    CSV.write(comp_io, CSV.Rows(read(decompressed_io); reusebuffer=true, drop=["remote_addr"]))
     close(comp_io)
 
+    # Re-compress the file back out onto disk
     open(outfile, write=true) do write_io
         compress!(comp_io, write_io)
     end
