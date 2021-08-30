@@ -31,11 +31,11 @@ for filename in ARGS
     # Re-compress the file back out onto disk
     comp_io = BufferStream()
     CSV.write(comp_io, sanitized_data)
+    close(comp_io)
     @info("written")
 
     open(outfile, write=true) do write_io
         compress!(comp_io, write_io)
         @info("compressed")
-        close(comp_io)
     end
 end
