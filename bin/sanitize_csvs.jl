@@ -22,20 +22,16 @@ for filename in ARGS
         decompress!(compressed_io, decompressed_io)
     end
     close(decompressed_io)
-    @info("decompressed")
 
     # Purposefully drop `remote_addr`; this is part of our "sanitization" process
     sanitized_data = CSV.File(read(decompressed_io); drop=["remote_addr"])
-    @info("dropped")
 
     # Re-compress the file back out onto disk
     comp_io = BufferStream()
     CSV.write(comp_io, sanitized_data)
     close(comp_io)
-    @info("written")
 
     open(outfile, write=true) do write_io
         compress!(comp_io, write_io)
-        @info("compressed")
     end
 end
