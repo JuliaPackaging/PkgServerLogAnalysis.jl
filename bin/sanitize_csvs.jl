@@ -15,26 +15,26 @@ mkpath(output_dir)
 #Threads.foreach(work_queue; ntasks=Threads.nthreads()) do filename
 for filename in ARGS
     outfile = joinpath(output_dir, basename(filename))
+    @info("Sanitizing $(basename(filename))")
+    decompressed_io = BufferStream()
+    open(filename, read=true) do compressed_io
+        # Decompress/read the `.csv.zst` into memory
+        decompress!(compressed_io, decompressed_io)
+    end
+    @info("decompressed")
+
+    # Purposefully drop `remote_addr`; this is part of our "sanitization" process
+    sanitized_data = CSV.File(read(decompressed_io); drop=["remote_addr"])
+    @info("dropped")
+
+    # Re-compress the file back out onto disk
+    comp_io = BufferStream()
+    CSV.write(comp_io, sanitized_data)
+    @info("written")
+
     open(outfile, write=true) do write_io
-        open(filename, read=true) do compressed_io
-            @info("Sanitizing $(basename(filename))")
-            # Decompress/read the `.csv.zst` into memory
-            decompressed_io = BufferStream()
-            decompress!(compressed_io, decompressed_io)
-
-            @info("decompressed")
-
-            # Purposefully drop `remote_addr`; this is part of our "sanitization" process
-            sanitized_data = CSV.File(read(decompressed_io); drop=["remote_addr"])
-            @info("dropped")
-
-            # Re-compress the file back out onto disk
-            comp_io = BufferStream()
-            CSV.write(comp_io, sanitized_data)
-            @info("written")
-            compress!(comp_io, write_io)
-            @info("compressed")
-            close(comp_io)
-        end
+        compress!(comp_io, write_io)
+        @info("compressed")
+        close(comp_io)
     end
 end
