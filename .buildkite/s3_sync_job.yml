@@ -28,7 +28,7 @@ steps:
           workspaces:
             - "$${BUILDKITE_PLUGIN_JULIA_CACHE_DIR}:$${BUILDKITE_PLUGIN_JULIA_CACHE_DIR}"
           verbose: "true"
-    timeout_in_minutes: 60
+    timeout_in_minutes: 120
     # Only allow one job to run at a time, to prevent us clobbering the bucket
     concurrency: 1
     concurrency_group: "JuliaPackaging/PkgServerLogAnalysis.jl/s3_sync_job.yml"
