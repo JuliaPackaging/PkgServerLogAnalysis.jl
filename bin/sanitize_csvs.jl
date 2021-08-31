@@ -9,11 +9,10 @@ if ispath(output_dir) && !isdir(output_dir)
 end
 mkpath(output_dir)
 
-#work_queue = Channel{String}(length(ARGS))
-#put!.(Ref(work_queue), ARGS)
-#close(work_queue)
-#Threads.foreach(work_queue; ntasks=Threads.nthreads()) do filename
-for filename in sort(ARGS)
+work_queue = Channel{String}(length(ARGS))
+put!.(Ref(work_queue), ARGS)
+close(work_queue)
+Threads.foreach(work_queue; ntasks=Threads.nthreads()) do filename
     outfile = joinpath(output_dir, basename(filename))
     @info("Sanitizing $(basename(filename))")
     decompressed_io = BufferStream()
