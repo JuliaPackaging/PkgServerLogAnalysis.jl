@@ -190,6 +190,9 @@ function parse_log_line(line::AbstractString, filename::AbstractString="")
     nothing_to_missing(::Nothing) = missing
     nothing_to_missing(x) = x
 
+    # Process field rewrites
+    field_rewrites = (; (k => nothing_to_missing(fetch_rewrite(m, k)) for k in mondo_capture_groups)...)
+
     # Try to parse out a pkgserver from the filename
     pkgserver = missing
     fm = match(r"^access_(.*)\.pkg\.julia", basename(filename))
@@ -197,5 +200,20 @@ function parse_log_line(line::AbstractString, filename::AbstractString="")
         pkgserver = fm[1]
     end
 
-    return (;(k => nothing_to_missing(fetch_rewrite(m, k)) for k in mondo_capture_groups)..., :pkgserver => pkgserver)
+    # Process IP address as an HLL hash
+    hll_hash = missing
+    remote_addr = field_rewrites[:remote_addr]
+    if remote_addr !== missing
+        hll_hash = bytes2hex(codeunits(hll_hash_ip(remote_addr)))
+    end
+
+    return (;
+        field_rewrites...,
+
+        # We add two "synthesized" columns; a pkgserver ID parsed from the filename itself,
+        # and a HyperLogLog hash of the client IP, which is sufficiently anonymized for us to
+        # store forever.
+        :pkgserver => pkgserver,
+        :hll_hash => hll_hash,
+    )
 end
