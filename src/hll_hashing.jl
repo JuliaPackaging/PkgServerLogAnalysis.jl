@@ -13,7 +13,7 @@ end
 ip_addr(host::UInt32) = IPv4(host)
 ip_addr(host::UInt128) = IPv6(host)
 
-# Feistel network with sha256 as round function
+# Feistel network with sha512 as round function
 
 const ROUNDS = 16
 const DIGEST = SHA.SHA512_CTX
@@ -69,18 +69,16 @@ function snowflake_hll((bucket, sample)::Tuple{UInt16, UInt8})
     return String(data)
 end
 
-# By default, we encrypt with a zeroed-out key.  The user must either explicitly pass in `key` to `hll_hash_ip()`
+# By default, we encrypt with an empty key.
+# The user must either explicitly pass in `key` to `hll_hash_ip()`
 # or call `load_hll_key!()` to change this key value.
-const default_hll_key = zeros(UInt8, 512)
+const default_hll_key = UInt8[]
 
 function load_hll_key!(path::AbstractString)
     open(path, read=true) do io
         # Read the file, try to assign it into `default_hll_key`
-        new_key = read(io)
-        if length(new_key) != 512
-            error("Invalid HLL key!  Must provide exactly 512 bytes of data!")
-        end
-        global default_hll_key[:] = new_key
+        empty!(default_hll_key)
+        append!(default_hll_key, read(io))
     end
     return nothing
 end
