@@ -8,6 +8,10 @@ include("AdminUtils.jl")
 include("compression.jl")
 include("parsing.jl")
 
+# Import HLL hashing code
+include("hll_hashing.jl")
+using .HyperLogLogHashIPs
+
 function hit_filecache(collator::Function, src_filename::String, cleanup::Bool = true)
     dst_filename = joinpath(@get_scratch!("raw_csvs"), string(splitext(basename(src_filename))[1], ".csv.zst"))
     had_to_parse = false

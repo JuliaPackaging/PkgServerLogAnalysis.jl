@@ -14,6 +14,7 @@ steps:
             - AWS_SECRET_ACCESS_KEY="U2FsdGVkX1/YhdG5Jr9ywTjysCrjQIoAlfrVT8qMPzBoPttuG3NIMorn3LLcWpp657MEPhjib+MQ/At1qllwBg=="
           files:
             - ".buildkite/secrets/id_rsa"
+            - ".buildkite/secrets/hll_key"
       - staticfloat/ssh-agent:
           keyfiles:
             - .buildkite/secrets/id_rsa
@@ -38,6 +39,7 @@ steps:
       LOG_DIR=$${JULIA_DEPOT_PATH}/scratchspaces/736c6f6f-5473-6973-796c-616e41676f4c/raw_logs
       CSV_DIR=$${JULIA_DEPOT_PATH}/scratchspaces/736c6f6f-5473-6973-796c-616e41676f4c/raw_csvs
       SANITIZED_CSV_DIR=$${JULIA_DEPOT_PATH}/scratchspaces/736c6f6f-5473-6973-796c-616e41676f4c/sanitized_csvs
+      HLL_KEYFILE="$$(pwd)/.buildkite/secrets/hll_key"
       mkdir -p "$${LOG_DIR}"
 
       # Instantiate our project
@@ -94,7 +96,7 @@ steps:
       rm -f $${LOGS_TO_PARSE_FILE} $${LOGS_TO_PARSE_LOCKFILE}
 
       echo "+++ Parsing $${#LOGS_TO_PARSE[@]} logfiles"
-      julia --project bin/parse_logfiles.jl "$${LOGS_TO_PARSE[@]}"
+      julia --project bin/parse_logfiles.jl "$${HLL_KEYFILE}" "$${LOGS_TO_PARSE[@]}"
 
       echo "+++ Sanitizing newly-created CSVs"
       CSVS_TO_SANITIZE=()
