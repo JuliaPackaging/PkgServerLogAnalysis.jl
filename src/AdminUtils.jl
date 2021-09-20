@@ -18,8 +18,15 @@ function get_server_list()
             canonical_servers = String[server]
         else
             # If we're not a loadbalancer, get our canonical address from `/meta`:
-            meta = JSON3.read(HTTP.get(string(server, "/meta")).body)
-            canonical_servers = String[meta["pkgserver_url"]]
+            meta = try
+                JSON3.read(HTTP.get(string(server, "/meta")).body)
+            catch
+                @error("pkgserver failed to respond to /meta", server)
+                Dict{String,String}()
+            end
+            if !isempty(meta)
+                canonical_servers = String[meta["pkgserver_url"]]
+            end
         end
 
         return future_servers_to_interrogate, canonical_servers
