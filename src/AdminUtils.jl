@@ -4,10 +4,11 @@ function get_server_list()
     function interrogate_server(server::String)
         # First, check to see if this server has any children
         children = try
-            JSON3.read(HTTP.get(string(server, "/meta/children")).body)
+            JSON3.read(HTTP.get(string(server, "/meta/children"); readtimeout=10).body)
         catch
             String[]
         end
+        #@info("Children", server, length(children))
 
         future_servers_to_interrogate = String[]
         canonical_servers = String[]
@@ -19,9 +20,9 @@ function get_server_list()
         else
             # If we're not a loadbalancer, get our canonical address from `/meta`:
             meta = try
-                JSON3.read(HTTP.get(string(server, "/meta")).body)
-            catch
-                @error("pkgserver failed to respond to /meta", server)
+                JSON3.read(HTTP.get(string(server, "/meta"); readtimeout=10).body)
+            catch e
+                @error("pkgserver failed to respond to /meta", server, e)
                 Dict{String,String}()
             end
             if !isempty(meta)
