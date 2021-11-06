@@ -76,6 +76,7 @@ function run_with_output(cmd::Cmd, timeout = 600.0, term_timeout = 10.0)
 end
 
 function get_ssh_creds(server)
+    server = replace(server, "https://" => "")
     username = "ubuntu"
 
     # Chinese servers use the username `centos`
