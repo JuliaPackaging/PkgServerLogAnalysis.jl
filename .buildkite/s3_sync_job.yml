@@ -1,7 +1,7 @@
 # NOTE: This buildkite pipeline is saved in the WebUI
 
 agents:
-  queue: "julia"
+  queue: "juliaecosystem"
   # Only run on `sandbox.jl` machines (not `docker`-isolated ones) since we need nestable sandboxing
   sandbox.jl: "true"
   os: "linux"
