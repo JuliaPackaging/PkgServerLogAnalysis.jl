@@ -3,8 +3,9 @@
 agents:
   queue: "juliaecosystem"
   # Only run on `sandbox.jl` machines (not `docker`-isolated ones) since we need nestable sandboxing
-  sandbox.jl: "true"
+  sandbox_capable: "true"
   os: "linux"
+  arch: "x86_64"
 steps:
   - label: ":rocket: sync logs"
     plugins:
@@ -24,8 +25,8 @@ steps:
           version: "1.6"
           persist_depo_dirs: registries,packages,artifacts,compiled,scratchspaces
       - staticfloat/sandbox:
-          rootfs_url: "https://github.com/JuliaCI/rootfs-images/releases/download/v3.14/pkgserver_logsync.x86_64.tar.gz"
-          rootfs_treehash: "d2566c22a9bb357042e1135cf968e2c7fd32a54a"
+          rootfs_url: "https://github.com/JuliaCI/rootfs-images/releases/download/v5.15/pkgserver_logsync.x86_64.tar.gz"
+          rootfs_treehash: "978f7b549296ecf115b6e5c61a048232994a88ea"
           workspaces:
             - "$${BUILDKITE_PLUGIN_JULIA_CACHE_DIR}:$${BUILDKITE_PLUGIN_JULIA_CACHE_DIR}"
           verbose: "true"
