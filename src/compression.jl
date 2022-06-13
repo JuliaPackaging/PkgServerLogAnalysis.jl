@@ -3,8 +3,11 @@ using CodecZlib, CodecZstd, TranscodingStreams
 function decompress!(input::IO, output::IO; blocksize::Int = 2*1024*1024)
     comp = detect_compressor(input)
     if comp === nothing
-        write(output, input)
-        return
+        while !eof(input)
+            write(output, read(input, blocksize))
+        end
+        close(output)
+        return nothing
     end
 
     output = TranscodingStream(decompressor_object(comp), output)
@@ -13,6 +16,7 @@ function decompress!(input::IO, output::IO; blocksize::Int = 2*1024*1024)
     end
     # Close the TranscodingStream (this implicitly closes the wrapped output)
     close(output)
+    return nothing
 end
 
 function compress!(input::IO, output::IO; blocksize::Int = 2*1024*1024, compression::String = "zstd")
