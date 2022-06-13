@@ -23,7 +23,7 @@ function hit_filecache(collator::Function, src_filename::String, cleanup::Bool =
             @info("Saving it out to <scratch space>/$(basename(dst_filename))")
             open(dst_filename, "w") do dst_io
                 comp_io = BufferStream()
-                t_comp = @async compress!(comp_io, dst_io)
+                t_comp = Base.errormonitor(@async compress!(comp_io, dst_io))
                 CSV.write(comp_io, data)
                 close(comp_io)
                 wait(t_comp)
@@ -48,8 +48,8 @@ function hit_filecache(collator::Function, src_filename::String, cleanup::Bool =
             decompress!(io, decomp_io)
         end
         return CSV.File(read(decomp_io))
-    catch
-        @error("Decompressing and parsing $(dst_filename) failed, re-parsing!")
+    catch e
+        @error("Decompressing and parsing $(dst_filename) failed, reparsing!", e)
         rm(dst_filename)
         return hit_filecache(collator, src_filename, cleanup)
     finally
@@ -61,7 +61,7 @@ function parse_file(filename::AbstractString)
     hit_filecache(filename) do maybe_compressed_io
         local io
         io = BufferStream()
-        @async decompress!(maybe_compressed_io, io)
+        Base.errormonitor(@async decompress!(maybe_compressed_io, io))
         parsed_lines = NamedTuple[]
         while !eof(io)
             parsed = parse_log_line(readline(io), filename)
