@@ -24,7 +24,7 @@ steps:
 
       # Install Julia for sandbox
       - JuliaCI/julia#v1:
-          version: "1.6"
+          version: "1.7"
           persist_depo_dirs: registries,packages,artifacts,compiled,scratchspaces
       - staticfloat/sandbox:
           rootfs_url: "https://github.com/JuliaCI/rootfs-images/releases/download/v5.15/pkgserver_logsync.x86_64.tar.gz"
