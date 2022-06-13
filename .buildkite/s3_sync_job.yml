@@ -6,6 +6,8 @@ agents:
   sandbox_capable: "true"
   os: "linux"
   arch: "x86_64"
+  # Use exclusive runners so that we can get the big machines with many cores for our parallelism.
+  exclusive: "true"
 steps:
   - label: ":rocket: sync logs"
     plugins:
@@ -30,7 +32,8 @@ steps:
           workspaces:
             - "$${BUILDKITE_PLUGIN_JULIA_CACHE_DIR}:$${BUILDKITE_PLUGIN_JULIA_CACHE_DIR}"
           verbose: "true"
-    timeout_in_minutes: 120
+    # Usually, we shouldn't need such a large timeout, but it's occasionally useful when we've slipped behind.
+    timeout_in_minutes: 300
     # Only allow one job to run at a time, to prevent us clobbering the bucket
     concurrency: 1
     concurrency_group: "JuliaPackaging/PkgServerLogAnalysis.jl/s3_sync_job.yml"
@@ -45,8 +48,12 @@ steps:
 
       # Instantiate our project
       julia --project -e 'import Pkg; Pkg.instantiate()'
+
+      echo "--- Show pkgserver in use"
+      curl -sfL https://pkg.julialang.org/meta
       
       # Get list of servers
+      echo "--- Get server list"
       SERVERS=( $$(julia --project bin/get_server_list.jl) )
 
       echo "--- Downloading logs from $${#SERVERS[@]} servers"
@@ -97,14 +104,14 @@ steps:
       rm -f $${LOGS_TO_PARSE_FILE} $${LOGS_TO_PARSE_LOCKFILE}
 
       echo "+++ Parsing $${#LOGS_TO_PARSE[@]} logfiles"
-      julia --project bin/parse_logfiles.jl "$${HLL_KEYFILE}" "$${LOGS_TO_PARSE[@]}"
+      julia --threads=auto --project bin/parse_logfiles.jl "$${HLL_KEYFILE}" "$${LOGS_TO_PARSE[@]}"
 
       echo "+++ Sanitizing newly-created CSVs"
       CSVS_TO_SANITIZE=()
       for f in $${LOGS_TO_PARSE[@]}; do
         CSVS_TO_SANITIZE+=( "$${CSV_DIR}/$$(basename $${f%.*}).csv.zst" )
       done
-      julia --project bin/sanitize_csvs.jl "$${SANITIZED_CSV_DIR}" "$${CSVS_TO_SANITIZE[@]}"
+      julia --threads=auto --project bin/sanitize_csvs.jl "$${SANITIZED_CSV_DIR}" "$${CSVS_TO_SANITIZE[@]}"
 
       echo "+++ Uploading '.csv.zst' files to S3"
       for f in $${LOGS_TO_PARSE[@]}; do
