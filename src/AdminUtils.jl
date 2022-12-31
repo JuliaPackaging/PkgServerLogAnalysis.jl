@@ -22,12 +22,12 @@ function get_server_list()
             meta = try
                 JSON3.read(HTTP.get(string(server, "/meta"); readtimeout=10).body)
             catch e
-                @error("pkgserver failed to respond to /meta", server, e)
-                Dict{String,String}()
+                @warn("pkgserver failed to respond to /meta", server, e)
+
+                # If we can't canonicalize, just use the URL we originally tried
+                Dict{String,String}("pkgserver_url" => server)
             end
-            if !isempty(meta)
-                canonical_servers = String[meta["pkgserver_url"]]
-            end
+            canonical_servers = String[meta["pkgserver_url"]]
         end
 
         return future_servers_to_interrogate, canonical_servers
