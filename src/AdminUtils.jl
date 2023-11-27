@@ -20,7 +20,7 @@ function get_server_list()
         else
             # If we're not a loadbalancer, get our canonical address from `/meta`:
             meta = try
-                JSON3.read(HTTP.get(string(server, "/meta"); readtimeout=10).body)
+                JSON3.read(HTTP.get(string(server, "/meta"); connect_timeout=10, readtimeout=10).body)
             catch e
                 @warn("pkgserver failed to respond to /meta", server, e)
 
