@@ -10,12 +10,26 @@ function get_server_list()
         end
         #@info("Children", server, length(children))
 
+        # Query if this is a new-style Cloudflare-loadbalancer by checking if the final
+        # redirect goes to storage.julialang.net when requesting Example@0.5.3
+        is_cf_lb(server) = try
+            uuid = "7876af07-990d-54b4-ab0e-23690620f79a"
+            tree_sha1 = "46e44e869b4d90b96bd8ed1fdcf32244fddfb6cc"
+            req = HTTP.head(string(server, "/package/$(uuid)/$(tree_sha1)"); readtimeout=10)
+            HTTP.header(req.request, "Host") == "storage.julialang.net"
+        catch
+            false
+        end
+
         future_servers_to_interrogate = String[]
         canonical_servers = String[]
 
-        # If we have children, we know we're a loadbalancer, so just use this URL as the canonical address:
+        # If we have children, we know we're an old-style loadbalancer, so just use this URL as the canonical address:
         if !isempty(children)
             future_servers_to_interrogate = collect(children)
+            canonical_servers = String[server]
+        elseif isempty(children) && is_cf_lb(server)
+            # No (public) children and redirecting to Cloudflare: get logs from the loadbalancer
             canonical_servers = String[server]
         else
             # If we're not a loadbalancer, get our canonical address from `/meta`:
