@@ -48,7 +48,11 @@ function get_server_list()
     end
 
     # Get the initial sibling list from the current default pkgserver
-    servers_to_interrogate = JSON3.read(HTTP.get("https://pkg.julialang.org/meta/siblings").body)
+    # servers_to_interrogate = JSON3.read(HTTP.get("https://pkg.julialang.org/meta/siblings").body)
+    # XXX: Use a custom one temporarily that exposes servers to be removed as
+    #      well so that we scrape the last logs from them before they are taken
+    #      offline.
+    servers_to_interrogate = JSON3.read(HTTP.get("https://loadbalancer-eu-north.ip.cflo.at/meta/siblings").body)
 
     servers = Channel{String}(10*length(servers_to_interrogate))
     while !isempty(servers_to_interrogate)
