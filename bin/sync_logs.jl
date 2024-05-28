@@ -14,9 +14,12 @@ logsdir = @get_scratch!("logs")
 @sync begin
     procs = Dict()
     for server in server_list
+        remote_logs = "~/apps/PkgServer.jl/loadbalancer/logs/nginx/access_*.gz"
+        if "https://cn-" in server
+            remote_logs = "~/src/PkgServer.jl/deployment/logs/nginx/access_*.gz"
+        end
         @async begin
             ssh_options = "ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o LogLevel=ERROR"
-            remote_logs = "~/src/PkgServer.jl/deployment/logs/nginx/access_*.gz"
             creds = get_ssh_creds(server)
             p, stdout, stderr = run_with_output(
                 `rsync -e $(ssh_options) -Pav "$(creds):$(remote_logs)" $(logsdir)`
