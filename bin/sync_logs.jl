@@ -15,7 +15,7 @@ logsdir = @get_scratch!("logs")
     procs = Dict()
     for server in server_list
         remote_logs = "~/apps/PkgServer.jl/loadbalancer/logs/nginx/access_*.gz"
-        if "https://cn-" in server
+        if startswith(server, "cn-")
             remote_logs = "~/src/PkgServer.jl/deployment/logs/nginx/access_*.gz"
         end
         @async begin
