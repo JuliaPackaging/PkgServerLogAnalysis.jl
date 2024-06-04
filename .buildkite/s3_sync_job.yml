@@ -51,7 +51,8 @@ steps:
 
       echo "--- Show pkgserver in use"
       curl -sfL https://pkg.julialang.org/meta
-      
+      echo ""
+
       # Get list of servers
       echo "--- Get server list"
       SERVERS=( $$(julia --project bin/get_server_list.jl) )
@@ -62,14 +63,16 @@ steps:
         echo " -> [$$IDX/$${#SERVERS[@]}] $${SERVER}"
 
         USER=ubuntu
+        REMOTE_LOGS="~/apps/PkgServer.jl/loadbalancer/logs/nginx/access_*.gz"
         if [[ "$${SERVER}" == cn-* ]]; then
           USER=centos
+          REMOTE_LOGS="~/src/PkgServer.jl/deployment/logs/nginx/access_*.gz"
         fi
         # Ignore return code from `rsync` so that we can skip failing servers
         # Also limit each transfer to 120s, so that we don't end up eating huge amounts of
         # CI time if a chinese server is feeling particularly slow today
         (timeout 120s rsync -Prt -e "ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -oBatchMode=yes" \
-                      "$${USER}@$${SERVER}:~/src/PkgServer.jl/deployment/logs/nginx/access_*.gz" \
+                      "$${USER}@$${SERVER}:$${REMOTE_LOGS}" \
                       "$${LOG_DIR}" || true) &
       done
 
