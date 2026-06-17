@@ -1,4 +1,6 @@
 
+const DEBUG_PARSE = parse(Bool, get(ENV, "DEBUG_PARSE", "false"))
+
 function field_ns(name, pat; quoted=false, allow_dash=false)
     local ret
     if allow_dash
@@ -172,16 +174,17 @@ function parse_log_line(line::AbstractString, filename::AbstractString="")
             mini_regex = Regex(join(mondo_pieces[1:idx]))
             mini_match = match(mini_regex, line)
             if mini_match === nothing
-                prev_regex = Regex(join(mondo_pieces[1:(idx-1)]))
-                prev_match = match(prev_regex, line)
-                if prev_match !== nothing
-                    next_token = first(split(line[max(length(prev_match.match),1):end]))
-                    @warn("Unable to parse", line, next_token, prev_match, idx, mondo_pieces[idx], filename, maxlog=4)
-                    break
+                if DEBUG_PARSE
+                    prev_regex = Regex(join(mondo_pieces[1:(idx-1)]))
+                    prev_match = match(prev_regex, line)
+                    if prev_match !== nothing
+                        next_token = first(split(line[max(length(prev_match.match),1):end]))
+                        @warn("Unable to parse", line, next_token, prev_match, idx, mondo_pieces[idx], filename, maxlog=4)
+                        break
+                    end
                 end
-
-            # If this is a well-known URL that we know we can't parse, silently fail
             elseif should_ignore_parse_failure(mini_match)
+                # If this is a well-known URL that we know we can't parse, silently fail
                 break
             end
         end
