@@ -20,7 +20,7 @@ function hit_filecache(collator::Function, src_filename::String, cleanup::Bool =
         try
             @info("Parsing $(basename(src_filename))")
             data = open(io -> collator(io), src_filename)
-            @info("Saving it out to <scratch space>/$(basename(dst_filename))")
+            @info("Saving it out to <scratch space>/raw_csvs/$(basename(dst_filename))")
             open(dst_filename, "w") do dst_io
                 comp_io = BufferStream()
                 t_comp = Base.errormonitor(@async compress!(comp_io, dst_io))

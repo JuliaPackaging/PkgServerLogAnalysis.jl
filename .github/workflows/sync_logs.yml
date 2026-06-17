@@ -1,0 +1,65 @@
+name: "Fetch, parse, upload logs"
+
+on:
+  schedule:
+    - cron: '15 */2 * * *'
+  push:
+    branches:
+      - master
+
+env:
+  AWS_ROLE_ARN: arn:aws:iam::873569884612:role/PkgServerLogAnalysisSync
+  EPHEMERAL_BUCKET: julialang-pkgserver-logs
+  PERSISTENT_BUCKET: julialang-pkgserver-logs-sanitized
+  SERVERS: au,eu-central,eu-north,in,jp,kr,sa,sg,us-east,us-west
+
+jobs:
+  sync:
+    name: "Fetch, parse, upload logs"
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    concurrency:
+      group: s3_sync_job
+      cancel-in-progress: false
+    permissions:
+      id-token: write
+      contents: read
+      actions: write
+
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - uses: webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555 # v0.10.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Write HLL key
+        run: |
+          HLL_KEY=$(mktemp)
+          base64 -d <<< "${{ secrets.HLL_KEY }}" > "$HLL_KEY"
+          chmod 600 "$HLL_KEY"
+          echo "HLL_KEY=$HLL_KEY" >> "$GITHUB_ENV"
+
+      - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3.0.2
+        with:
+          version: '1.12'
+
+      - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3.1.0
+
+      - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.julia/scratchspaces/736c6f6f-5473-6973-796c-616e41676f4c/s3cache.csv
+          key: s3cache-${{ github.run_id }}
+          restore-keys: s3cache-
+
+
+      - uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b # v6.2.0
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Instantiate project
+        run: julia --project -e 'import Pkg; Pkg.instantiate()'
+
+      - name: Run sync
+        run: julia --threads=auto --project .github/scripts/s3_sync_job.jl
