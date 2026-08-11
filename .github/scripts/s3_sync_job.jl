@@ -23,6 +23,7 @@ mkpath(sanitized_log_dir)
 # Cache file to avoid unnecessary S3 requests
 const s3_cache_file = joinpath(scratch_prefix, "s3cache.csv")
 const s3cache = isfile(s3_cache_file) ? Set(readlines(s3_cache_file)) : Set{String}()
+const s3cache_lock = ReentrantLock()
 @info "--- Restored $(length(s3cache)) entries from s3cache"
 
 # Load the HLL keyfile
@@ -54,12 +55,6 @@ function rsync_logs(server)
     return
 end
 
-function sync_raw_logs()
-    @info "--- Uploading raw logs to ephemeral S3 bucket"
-    run(`aws s3 sync --no-progress --acl=private $(raw_log_dir) "s3://$(ephemeral_bucket)/raw/"`)
-    return
-end
-
 struct LogFile
     key::String
 end
@@ -67,103 +62,103 @@ raw_path(l::LogFile) = joinpath(raw_log_dir, l.key * ".gz")
 parsed_path(l::LogFile) = joinpath(parsed_log_dir, l.key * ".csv.zst")
 sanitized_path(l::LogFile) = joinpath(sanitized_log_dir, l.key * ".csv.zst")
 
+raw_s3_path(l::LogFile) = "s3://$(ephemeral_bucket)/raw/" * l.key * ".gz"
 parsed_s3_path(l::LogFile) = "s3://$(ephemeral_bucket)/csv/" * l.key * ".csv.zst"
 sanitized_s3_path(l::LogFile) = "s3://$(persistent_bucket)/csv/" * l.key * ".csv.zst"
 
-function exist_sanitized_in_s3(l::LogFile)
-    if l.key in s3cache
-        return true
+is_cached(l::LogFile) = @lock s3cache_lock l.key in s3cache
+
+# Record a fully processed log in the cache, both in memory and on disk
+function record_processed!(l::LogFile)
+    @lock s3cache_lock begin
+        if !(l.key in s3cache)
+            push!(s3cache, l.key)
+            open(s3_cache_file, "a") do io
+                println(io, l.key)
+            end
+        end
     end
+    return
+end
+
+function exist_sanitized_in_s3(l::LogFile)
     key = "csv/" * l.key * ".csv.zst"
     @info "Checking S3 for $key"
     cmd = `aws s3api head-object --bucket $(persistent_bucket) --key $(key)`
     return success(pipeline(cmd; stdout = devnull, stderr = devnull))
 end
 
-function filter_processed_logs()
-    local_logs = Set{String}(
-        splitext(basename(f))[1] for f in readdir(raw_log_dir; join = true) if isfile(f) && endswith(f, ".gz")
-    )
-    files_to_parse = Channel{LogFile}(length(local_logs))
-    queue = Channel{LogFile}(Inf) do ch
-        for l in local_logs
-            put!(ch, LogFile(l))
-        end
-    end
-    Threads.foreach(queue; ntasks = 32) do f
-        if !exist_sanitized_in_s3(f)
-            put!(files_to_parse, f)
-        end
-    end
-    close(files_to_parse)
-    return local_logs, collect(files_to_parse)
-end
-
-function write_s3cache(keys)
-    tmp = s3_cache_file * ".tmp"
-    open(tmp, "w") do io
-        for k in keys
-            println(io, k)
-        end
-    end
-    mv(tmp, s3_cache_file; force = true)
-    return
-end
-
-# bin/parse_logfiles.jl
-function parse_logfiles(logs_to_parse)
-    work_queue = Channel{String}() do q
-        for l in logs_to_parse
-            put!(q, raw_path(l))
-        end
-    end
-    Threads.foreach(work_queue; ntasks = 2 * Threads.nthreads()) do f
-        PkgServerLogAnalysis.parse_file(f)
-    end
-    return
-end
-
 # bin/sanitize_csvs.jl
-function sanitize_logfiles(logs_to_parse)
-    work_queue = Channel{String}() do q
-        for l in logs_to_parse
-            put!(q, parsed_path(l))
-        end
+function sanitize_logfile(l::LogFile)
+    filename = parsed_path(l)
+    outfile = sanitized_path(l)
+    @info("Sanitizing $(basename(filename))")
+    decompressed_io = BufferStream()
+    open(filename, read = true) do compressed_io
+        # Decompress/read the `.csv.zst` into memory
+        decompress!(compressed_io, decompressed_io)
     end
-    Threads.foreach(work_queue; ntasks = 2 * Threads.nthreads()) do filename
-        outfile = joinpath(sanitized_log_dir, basename(filename))
-        @info("Sanitizing $(basename(filename))")
-        decompressed_io = BufferStream()
-        open(filename, read = true) do compressed_io
-            # Decompress/read the `.csv.zst` into memory
-            decompress!(compressed_io, decompressed_io)
-        end
-        close(decompressed_io)
+    close(decompressed_io)
 
-        # Purposefully drop `remote_addr`; this is part of our "sanitization" process
-        comp_io = BufferStream()
-        CSV.write(comp_io, CSV.Rows(read(decompressed_io); reusebuffer = true, drop = ["remote_addr"]))
-        close(comp_io)
+    # Purposefully drop `remote_addr`; this is part of our "sanitization" process
+    comp_io = BufferStream()
+    CSV.write(comp_io, CSV.Rows(read(decompressed_io); reusebuffer = true, drop = ["remote_addr"]))
+    close(comp_io)
 
-        # Re-compress the file back out onto disk
-        open(outfile, write = true) do write_io
-            compress!(comp_io, write_io)
-        end
+    # Re-compress the file back out onto disk
+    open(outfile, write = true) do write_io
+        compress!(comp_io, write_io)
     end
     return
 end
 
-function s3_upload(logs_to_parse)
-    work_queue = Channel{LogFile}() do q
-        for l in logs_to_parse
-            put!(q, l)
+# Run the full pipeline for a single log file: upload the raw log, parse it,
+# sanitize it, upload the results and finally record it in the cache.
+function process_logfile(l::LogFile)
+    # Skip if this log has already been fully processed in a previous run
+    if is_cached(l)
+        return
+    end
+    if exist_sanitized_in_s3(l)
+        record_processed!(l)
+        return
+    end
+    # Upload the raw log to the ephemeral S3 bucket
+    @info "Uploading $(raw_path(l)) to $(raw_s3_path(l))"
+    run(`aws s3 cp --no-progress --acl=private $(raw_path(l)) $(raw_s3_path(l))`)
+    # Parse the file
+    PkgServerLogAnalysis.parse_file(raw_path(l))
+    # Sanitize the file
+    sanitize_logfile(l)
+    # Upload parsed and sanitized files to S3
+    @info "Uploading $(parsed_path(l)) to $(parsed_s3_path(l))"
+    run(`aws s3 cp --no-progress --acl=private $(parsed_path(l)) $(parsed_s3_path(l))`)
+    @info "Uploading $(sanitized_path(l)) to $(sanitized_s3_path(l))"
+    run(`aws s3 cp --no-progress --acl=private $(sanitized_path(l)) $(sanitized_s3_path(l))`)
+    # Everything for this log is now in S3
+    record_processed!(l)
+    return
+end
+
+function process_logs()
+    local_logs = sort!(
+        [
+            splitext(basename(f))[1] for f in readdir(raw_log_dir; join = true)
+            if isfile(f) && endswith(f, ".gz")
+        ]
+    )
+    @info "Found $(length(local_logs)) local logs"
+    queue = Channel{LogFile}(Inf) do ch
+        for key in local_logs
+            put!(ch, LogFile(key))
         end
     end
-    Threads.foreach(work_queue; ntasks = 32) do f
-        @info "Uploading $(parsed_path(f)) to $(parsed_s3_path(f))"
-        run(`aws s3 cp --no-progress --acl=private $(parsed_path(f)) $(parsed_s3_path(f))`)
-        @info "Uploading $(sanitized_path(f)) to $(sanitized_s3_path(f))"
-        run(`aws s3 cp --no-progress --acl=private $(sanitized_path(f)) $(sanitized_s3_path(f))`)
+    Threads.foreach(queue; ntasks = 2 * Threads.nthreads()) do l
+        try
+            process_logfile(l)
+        catch e
+            @error "Processing $(l.key) failed" exception = (e, catch_backtrace())
+        end
     end
     return
 end
@@ -173,19 +168,8 @@ function main()
     @sync for server in servers
         Threads.@spawn rsync_logs(server)
     end
-    # Sync raw logs with ephemeral bucket on S3
-    sync_raw_logs()
-    # Filter out logs that we have already processed
-    local_logs, logs_to_parse = filter_processed_logs()
-    @info "Found $(length(local_logs)) local logs, $(length(logs_to_parse)) to parse"
-    # Parse the files
-    parse_logfiles(logs_to_parse)
-    # Sanitize the files
-    sanitize_logfiles(logs_to_parse)
-    # Upload to S3
-    s3_upload(logs_to_parse)
-    # Cache all local logs — after upload, everything is in S3
-    write_s3cache(local_logs)
+    # Process each log file (upload raw, parse, sanitize, upload results)
+    process_logs()
     return
 end
 
