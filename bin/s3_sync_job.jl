@@ -24,7 +24,7 @@ mkpath(sanitized_log_dir)
 const s3_cache_file = joinpath(scratch_prefix, "s3cache.csv")
 const s3cache = isfile(s3_cache_file) ? Set(readlines(s3_cache_file)) : Set{String}()
 const s3cache_lock = ReentrantLock()
-@info "--- Restored $(length(s3cache)) entries from s3cache"
+@info "--- Restored $(length(s3cache)) entries from s3cache file ($(s3_cache_file))"
 
 # Load the HLL keyfile
 PkgServerLogAnalysis.load_hll_key!(hll_keyfile)
@@ -160,20 +160,25 @@ function process_logs()
             if isfile(f) && endswith(f, ".gz")
         ]
     )
-    @info "Found $(length(local_logs)) local logs"
-    queue = Channel{LogFile}(Inf) do ch
-        for key in local_logs
-            put!(ch, LogFile(key))
+    ntotal = length(local_logs)
+    @info "Found $(ntotal) local logs"
+    queue = Channel{Tuple{Int, LogFile}}(Inf) do ch
+        for (i, key) in enumerate(local_logs)
+            put!(ch, (i, LogFile(key)))
         end
     end
     nfailed = Threads.Atomic{Int}(0)
-    Threads.foreach(queue; ntasks = 2 * Threads.nthreads()) do l
+    ndone = Threads.Atomic{Int}(0)
+    Threads.foreach(queue; ntasks = 2 * Threads.nthreads()) do (i, l)
+        @info "($(i)/$(ntotal)) Processing $(l.key)"
         try
             process_logfile(l)
         catch e
             Threads.atomic_add!(nfailed, 1)
             @error "Processing $(l.key) failed" exception = (e, catch_backtrace())
         end
+        done = Threads.atomic_add!(ndone, 1) + 1
+        @info "($(done)/$(ntotal)) logs completed"
     end
     return nfailed[]
 end
