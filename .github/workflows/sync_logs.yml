@@ -62,4 +62,4 @@ jobs:
         run: julia --project -e 'import Pkg; Pkg.instantiate()'
 
       - name: Run sync
-        run: julia --threads=auto --project .github/scripts/s3_sync_job.jl
+        run: julia --threads=auto --project bin/s3_sync_job.jl
