@@ -10,6 +10,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+export AWS_REGION=${AWS_REGION:-us-east-1}
 export SERVERS=${SERVERS:-au,eu-central,eu-north,in,jp,kr,sa,sg,us-east,us-west}
 export EPHEMERAL_BUCKET=${EPHEMERAL_BUCKET:-julialang-pkgserver-logs}
 export PERSISTENT_BUCKET=${PERSISTENT_BUCKET:-julialang-pkgserver-logs-sanitized}
