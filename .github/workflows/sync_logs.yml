@@ -6,6 +6,7 @@ on:
   push:
     branches:
       - master
+  workflow_dispatch:
 
 env:
   AWS_ROLE_ARN: arn:aws:iam::873569884612:role/PkgServerLogAnalysisSync
