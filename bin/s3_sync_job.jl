@@ -86,9 +86,13 @@ function record_processed!(l::LogFile)
     @lock s3cache_lock begin
         if !(l.key in s3cache)
             push!(s3cache, l.key)
-            open(s3_cache_file, "a") do io
-                println(io, l.key)
+            tmp = s3_cache_file * ".tmp"
+            open(tmp, "w") do io
+                for k in s3cache
+                    println(io, k)
+                end
             end
+            mv(tmp, s3_cache_file; force = true)
         end
     end
     return
