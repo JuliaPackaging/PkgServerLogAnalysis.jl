@@ -30,6 +30,19 @@ const s3cache_lock = ReentrantLock()
 PkgServerLogAnalysis.load_hll_key!(hll_keyfile)
 
 
+# Verify that AWS credentials are available before doing any work. Note that a
+# credential failure in exist_sanitized_in_s3 is indistinguishable from a
+# missing object, so without this check the whole pipeline would run only to
+# fail at the upload steps.
+function check_aws_credentials()
+    @info "--- Checking AWS credentials"
+    cmd = `aws sts get-caller-identity`
+    if !success(pipeline(cmd; stdout = devnull))
+        error("AWS credentials check failed (`aws sts get-caller-identity`)")
+    end
+    return
+end
+
 function rsync_logs(server)
     host = server * ".pkg.julialang.org"
     @info "--- Syncing remote logs from host $host"
@@ -153,23 +166,32 @@ function process_logs()
             put!(ch, LogFile(key))
         end
     end
+    nfailed = Threads.Atomic{Int}(0)
     Threads.foreach(queue; ntasks = 2 * Threads.nthreads()) do l
         try
             process_logfile(l)
         catch e
+            Threads.atomic_add!(nfailed, 1)
             @error "Processing $(l.key) failed" exception = (e, catch_backtrace())
         end
     end
-    return
+    return nfailed[]
 end
 
 function main()
+    # Fail fast on missing/expired AWS credentials
+    check_aws_credentials()
     # Sync remote logs to local directory
     @sync for server in servers
         Threads.@spawn rsync_logs(server)
     end
     # Process each log file (upload raw, parse, sanitize, upload results)
-    process_logs()
+    nfailed = process_logs()
+    # Individual failures don't abort the queue, but the job as a whole should
+    # still fail loudly if anything went wrong
+    if nfailed > 0
+        error("Processing failed for $(nfailed) logfile(s), see logs above")
+    end
     return
 end
 
