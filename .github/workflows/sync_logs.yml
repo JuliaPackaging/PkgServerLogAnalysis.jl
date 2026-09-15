@@ -62,6 +62,8 @@ jobs:
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: us-east-1
+          # Match timeout-minutes; requires MaxSessionDuration >= 18000 on the role
+          role-duration-seconds: 18000
 
       - name: Instantiate project
         run: julia --project -e 'import Pkg; Pkg.instantiate()'
