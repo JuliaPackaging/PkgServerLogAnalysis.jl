@@ -190,16 +190,26 @@ end
 function main()
     # Fail fast on missing/expired AWS credentials
     check_aws_credentials()
-    # Sync remote logs to local directory
+    # Sync remote logs to local directory. Failures are recorded but don't
+    # abort the job; logs from the working servers are still processed.
+    nfailed_rsync = Threads.Atomic{Int}(0)
     @sync for server in servers
-        Threads.@spawn rsync_logs(server)
+        Threads.@spawn try
+            rsync_logs(server)
+        catch e
+            Threads.atomic_add!(nfailed_rsync, 1)
+            @error "Syncing remote logs from server $(server) failed" exception = (e, catch_backtrace())
+        end
     end
     # Process each log file (upload raw, parse, sanitize, upload results)
-    nfailed = process_logs()
-    # Individual failures don't abort the queue, but the job as a whole should
-    # still fail loudly if anything went wrong
-    if nfailed > 0
-        error("Processing failed for $(nfailed) logfile(s), see logs above")
+    nfailed_logs = process_logs()
+    # Individual failures don't abort the job, but it should still fail loudly
+    # at the end if anything went wrong
+    if nfailed_rsync[] > 0 || nfailed_logs > 0
+        error(
+            "Syncing failed for $(nfailed_rsync[]) server(s) and processing " *
+            "failed for $(nfailed_logs) logfile(s), see logs above"
+        )
     end
     return
 end
