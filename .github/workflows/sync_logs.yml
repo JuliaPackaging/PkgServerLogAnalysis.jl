@@ -44,6 +44,23 @@ jobs:
           # so it must be a single line without spaces
           ping: packageserver-au,packageserver-eu-central,packageserver-eu-north,packageserver-in,packageserver-jp,packageserver-kr,packageserver-sa,packageserver-sg,packageserver-us-east,packageserver-us-west
 
+      # Debug: check whether we get direct connections to the pkgservers or
+      # if the traffic is relayed through DERP (does not fail the job)
+      - name: Check for direct connections
+        run: |
+          for s in ${SERVERS//,/ }; do
+            ( if tailscale ping -c 10 --timeout=2s "packageserver-$s" > "/tmp/ping-$s.log" 2>&1; then
+                echo "direct" > "/tmp/ping-$s.verdict"
+              else
+                echo "RELAYED" > "/tmp/ping-$s.verdict"
+              fi ) &
+          done
+          wait
+          for s in ${SERVERS//,/ }; do
+            echo "--- packageserver-$s: $(cat /tmp/ping-$s.verdict)"
+            cat "/tmp/ping-$s.log"
+          done
+
       - name: Write HLL key
         run: |
           HLL_KEY=$(mktemp)
