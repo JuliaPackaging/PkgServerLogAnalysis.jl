@@ -8,7 +8,7 @@ const servers = split(ENV["SERVERS"], ",")
 # (MagicDNS) names so that rsync/ssh goes over the tailnet (Tailscale SSH)
 const host_pattern = get(ENV, "PKGSERVER_HOST_PATTERN", "{server}.pkg.julialang.org")
 const timeout = let t = Sys.which("timeout") !== nothing ? Sys.which("timeout") : Sys.which("gtimeout")
-    t !== nothing ? `$t 300s` : ``
+    t !== nothing ? `$t 900s` : ``
 end
 const hll_keyfile = ENV["HLL_KEY"]
 const ephemeral_bucket = ENV["EPHEMERAL_BUCKET"]
