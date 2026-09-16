@@ -48,12 +48,13 @@ end
 
 function rsync_logs(server)
     host = replace(host_pattern, "{server}" => server)
-    @info "--- Syncing remote logs from host $host"
     remote_user = "ubuntu"
-    remote_log_dir = "~/apps/PkgServer.jl/loadbalancer/logs/nginx/access_*.gz"
+    # Note: paths relative to the remote home directory; `~` is not expanded
+    # when rsync passes the path with --files-from
+    remote_log_dir = "apps/PkgServer.jl/loadbalancer/logs/nginx"
     if startswith(server, "cn-")
         remote_user = "centos"
-        remote_log_dir = "~/src/PkgServer.jl/deployment/logs/nginx/access_*.gz"
+        remote_log_dir = "src/PkgServer.jl/deployment/logs/nginx"
     end
     ssh = join(
         [
@@ -64,10 +65,36 @@ function rsync_logs(server)
         ],
         " "
     )
-    # -v --stats to see progress and transfer rates in the log
-    cmd = `$timeout rsync -rtv --stats -e $(ssh) $(remote_user)@$(host):$(remote_log_dir) $(raw_log_dir)`
-    if run(ignorestatus(cmd)).exitcode != 0
-        error("Syncing remote logs from host $(host) failed")
+    # List the remote logs and filter out already processed ones so that only
+    # new files are transferred
+    @info "--- Listing remote logs from host $host"
+    remote_logs_glob = remote_log_dir * "/access_*.gz"
+    list_cmd = `$timeout rsync --list-only -e $(ssh) $(remote_user)@$(host):$(remote_logs_glob)`
+    out = IOBuffer()
+    if run(pipeline(ignorestatus(list_cmd); stdout = out)).exitcode != 0
+        error("Listing remote logs from host $(host) failed")
+    end
+    remote_logs = String[]
+    for line in eachline(seekstart(out))
+        # Lines look like `-rw-r--r-- 12,345 2026/09/16 18:02:01 access_(...).gz`
+        startswith(line, "-") || continue
+        fields = split(line; limit = 5)
+        length(fields) == 5 || continue
+        push!(remote_logs, String(fields[5]))
+    end
+    needed = filter(f -> needs_processing(LogFile(splitext(f)[1])), remote_logs)
+    @info "--- Syncing $(length(needed)) of $(length(remote_logs)) remote logs from host $host"
+    isempty(needed) && return
+    mktemp() do files_from, io
+        for f in needed
+            println(io, f)
+        end
+        close(io)
+        # -v --stats to see progress and transfer rates in the log
+        cmd = `$timeout rsync -tv --stats -e $(ssh) --files-from=$(files_from) $(remote_user)@$(host):$(remote_log_dir)/ $(raw_log_dir)`
+        if run(ignorestatus(cmd)).exitcode != 0
+            error("Syncing remote logs from host $(host) failed")
+        end
     end
     return
 end
@@ -109,6 +136,19 @@ function exist_sanitized_in_s3(l::LogFile)
     return success(pipeline(cmd; stdout = devnull, stderr = devnull))
 end
 
+# Check whether this log still needs to be processed: first against the local
+# cache and then against S3 (recording a hit in the cache for next time)
+function needs_processing(l::LogFile)
+    if is_cached(l)
+        return false
+    end
+    if exist_sanitized_in_s3(l)
+        record_processed!(l)
+        return false
+    end
+    return true
+end
+
 # bin/sanitize_csvs.jl
 function sanitize_logfile(l::LogFile)
     filename = parsed_path(l)
@@ -137,11 +177,7 @@ end
 # sanitize it, upload the results and finally record it in the cache.
 function process_logfile(l::LogFile)
     # Skip if this log has already been fully processed in a previous run
-    if is_cached(l)
-        return
-    end
-    if exist_sanitized_in_s3(l)
-        record_processed!(l)
+    if !needs_processing(l)
         return
     end
     # Upload the raw log to the ephemeral S3 bucket
