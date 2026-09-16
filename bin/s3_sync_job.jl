@@ -64,7 +64,8 @@ function rsync_logs(server)
         ],
         " "
     )
-    cmd = `$timeout rsync -rt -e $(ssh) $(remote_user)@$(host):$(remote_log_dir) $(raw_log_dir)`
+    # -v --stats to see progress and transfer rates in the log
+    cmd = `$timeout rsync -rtv --stats -e $(ssh) $(remote_user)@$(host):$(remote_log_dir) $(raw_log_dir)`
     if run(ignorestatus(cmd)).exitcode != 0
         error("Syncing remote logs from host $(host) failed")
     end
