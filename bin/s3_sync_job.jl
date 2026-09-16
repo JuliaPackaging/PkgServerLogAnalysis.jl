@@ -4,6 +4,9 @@ import PkgServerLogAnalysis
 import PkgServerLogAnalysis: CSV, BufferStream, decompress!, compress!
 
 const servers = split(ENV["SERVERS"], ",")
+# Template for the pkgserver hostnames; on CI this is set to the tailnet
+# (MagicDNS) names so that rsync/ssh goes over the tailnet (Tailscale SSH)
+const host_pattern = get(ENV, "PKGSERVER_HOST_PATTERN", "{server}.pkg.julialang.org")
 const timeout = let t = Sys.which("timeout") !== nothing ? Sys.which("timeout") : Sys.which("gtimeout")
     t !== nothing ? `$t 300s` : ``
 end
@@ -44,7 +47,7 @@ function check_aws_credentials()
 end
 
 function rsync_logs(server)
-    host = server * ".pkg.julialang.org"
+    host = replace(host_pattern, "{server}" => server)
     @info "--- Syncing remote logs from host $host"
     remote_user = "ubuntu"
     remote_log_dir = "~/apps/PkgServer.jl/loadbalancer/logs/nginx/access_*.gz"

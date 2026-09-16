@@ -13,6 +13,9 @@ env:
   EPHEMERAL_BUCKET: julialang-pkgserver-logs
   PERSISTENT_BUCKET: julialang-pkgserver-logs-sanitized
   SERVERS: au,eu-central,eu-north,in,jp,kr,sa,sg,us-east,us-west
+  HEADSCALE_URL: https://headscale.julialang.org
+  # Tailnet (MagicDNS) names of the pkgservers
+  PKGSERVER_HOST_PATTERN: packageserver-{server}.tailnet.julialang.org
 
 jobs:
   sync:
@@ -30,9 +33,16 @@ jobs:
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
-      - uses: webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555 # v0.10.0
+      # Join the tailnet as an ephemeral node; ssh access to the pkgservers
+      # is granted by the tag:logsync tag carried by the preauth key
+      - uses: tailscale/github-action@780049a30b6ff5c378a9e7b389d15ece7a204888 # v4.1.3
         with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+          args: --login-server=${{ env.HEADSCALE_URL }}
+          hostname: logsync-ci
+          # Note: the action splits this on "," without trimming whitespace,
+          # so it must be a single line without spaces
+          ping: packageserver-au,packageserver-eu-central,packageserver-eu-north,packageserver-in,packageserver-jp,packageserver-kr,packageserver-sa,packageserver-sg,packageserver-us-east,packageserver-us-west
 
       - name: Write HLL key
         run: |
