@@ -33,11 +33,24 @@ jobs:
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
+      # Exchange this job's OIDC token for a short-lived single-use tailnet
+      # preauth key via headscale-sts
+      # (https://github.com/fredrikekre/headscale-sts)
+      - name: Mint tailnet key via OIDC
+        id: mint
+        run: |
+          OIDC=$(curl -sf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=${{ env.HEADSCALE_URL }}/sts" | jq -r .value)
+          KEY=$(curl -sf -X POST "${{ env.HEADSCALE_URL }}/sts/authkey" \
+            -H "Authorization: Bearer $OIDC")
+          echo "::add-mask::$KEY"
+          echo "authkey=$KEY" >> "$GITHUB_OUTPUT"
+
       # Join the tailnet as an ephemeral node; ssh access to the pkgservers
       # is granted by the tag:logsync tag carried by the preauth key
       - uses: tailscale/github-action@780049a30b6ff5c378a9e7b389d15ece7a204888 # v4.1.3
         with:
-          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+          authkey: ${{ steps.mint.outputs.authkey }}
           args: --login-server=${{ env.HEADSCALE_URL }}
           hostname: logsync-ci
           # Note: the action splits this on "," without trimming whitespace,
