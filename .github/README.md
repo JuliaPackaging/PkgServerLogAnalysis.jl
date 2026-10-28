@@ -61,7 +61,19 @@ ARN: `arn:aws:iam::873569884612:role/PkgServerLogAnalysisSync`
 
 ## Secrets
 
-Set these in: Settings → Secrets and variables → Actions → Secrets
+Set these as secrets of the `logsync` environment (Settings → Environments →
+`logsync`), not as repository secrets, so that they are only available to the
+job on `master`:
 
-- `SSH_PRIVATE_KEY` — private key for rsync access to the pkg servers
 - `HLL_KEY` — HyperLogLog key, base64-encoded: `base64 -w0 < hll_key`
+
+## Package server access
+
+The job joins the tailnet as `tag:logsync`, with a single-use preauth key
+minted from its OIDC token by headscale-sts
+(https://github.com/fredrikekre/headscale-sts). The headscale-sts rule
+requires the `logsync` environment on `master` of this repository (matched by
+repository and owner id). The tailnet policy allows `tag:logsync` to SSH
+(Tailscale SSH) to `tag:packageserver` as the `logsync` user only, which has
+no sudo or docker access and reads the logs from a read-only bind mount at
+`/srv/logsync/nginx`.

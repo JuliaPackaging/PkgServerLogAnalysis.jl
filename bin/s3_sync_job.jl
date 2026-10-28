@@ -48,12 +48,15 @@ end
 
 function rsync_logs(server)
     host = replace(host_pattern, "{server}" => server)
-    remote_user = "ubuntu"
-    # Note: paths relative to the remote home directory; `~` is not expanded
-    # when rsync passes the path with --files-from
-    remote_log_dir = "apps/PkgServer.jl/loadbalancer/logs/nginx"
+    # Unprivileged user with read-only access to the nginx logs through a bind
+    # mount (set up by ansible/package-servers.yml). The mount is world
+    # readable so local runs can use their own user (see bin/run_sync.sh).
+    remote_user = get(ENV, "PKGSERVER_USER", "logsync")
+    remote_log_dir = "/srv/logsync/nginx"
     if startswith(server, "cn-")
         remote_user = "centos"
+        # Note: path relative to the remote home directory; `~` is not
+        # expanded when rsync passes the path with --files-from
         remote_log_dir = "src/PkgServer.jl/deployment/logs/nginx"
     end
     ssh = join(
