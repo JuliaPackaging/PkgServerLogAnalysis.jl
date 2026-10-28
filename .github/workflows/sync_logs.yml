@@ -79,11 +79,17 @@ jobs:
           done
 
       - name: Write HLL key
+        env:
+          HLL_KEY_BASE64: ${{ secrets.HLL_KEY }}
         run: |
+          if [ -z "${HLL_KEY_BASE64}" ]; then
+            echo "::error::The HLL_KEY secret is not set"
+            exit 1
+          fi
           HLL_KEY=$(mktemp)
-          base64 -d <<< "${{ secrets.HLL_KEY }}" > "$HLL_KEY"
-          chmod 600 "$HLL_KEY"
-          echo "HLL_KEY=$HLL_KEY" >> "$GITHUB_ENV"
+          base64 -d <<< "${HLL_KEY_BASE64}" > "${HLL_KEY}"
+          chmod 600 "${HLL_KEY}"
+          echo "HLL_KEY=${HLL_KEY}" >> "$GITHUB_ENV"
 
       - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3.0.2
         with:
