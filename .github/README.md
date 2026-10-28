@@ -14,7 +14,8 @@ Account: `873569884612`
 
 ARN: `arn:aws:iam::873569884612:role/PkgServerLogAnalysisSync`
 
-**Trust policy** — allows OIDC federation from the `master` branch only:
+**Trust policy** — allows OIDC federation from the `logsync` environment only
+(which in turn only allows deployments from the `master` branch):
 
 ```json
 {
@@ -28,7 +29,7 @@ ARN: `arn:aws:iam::873569884612:role/PkgServerLogAnalysisSync`
     "Condition": {
       "StringEquals": {
         "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-        "token.actions.githubusercontent.com:sub": "repo:JuliaPackaging/PkgServerLogAnalysis.jl:ref:refs/heads/master"
+        "token.actions.githubusercontent.com:sub": "repo:JuliaPackaging/PkgServerLogAnalysis.jl:environment:logsync"
       }
     }
   }]
