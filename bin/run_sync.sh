@@ -14,6 +14,8 @@ export AWS_REGION=${AWS_REGION:-us-east-1}
 export SERVERS=${SERVERS:-au,eu-central,eu-north,in,jp,kr,sa,sg,us-east,us-west}
 export EPHEMERAL_BUCKET=${EPHEMERAL_BUCKET:-julialang-pkgserver-logs}
 export PERSISTENT_BUCKET=${PERSISTENT_BUCKET:-julialang-pkgserver-logs-sanitized}
+# The logsync user used on CI only accepts Tailscale SSH from the CI job
+export PKGSERVER_USER=${PKGSERVER_USER:-ubuntu}
 : "${HLL_KEY:?set HLL_KEY to the path of the HLL keyfile}"
 
 exec julia --threads=auto --project bin/s3_sync_job.jl
