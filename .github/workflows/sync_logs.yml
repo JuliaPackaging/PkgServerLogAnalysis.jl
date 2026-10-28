@@ -22,6 +22,10 @@ jobs:
     name: "Fetch, parse, upload logs"
     runs-on: ubuntu-latest
     timeout-minutes: 300
+    # The logsync environment only allows deployments from master. The
+    # headscale-sts rule and the AWS role trust policy match on the
+    # environment claim in the OIDC token.
+    environment: logsync
     concurrency:
       group: s3_sync_job
       cancel-in-progress: false
